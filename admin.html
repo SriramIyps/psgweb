@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PSGCAS Admin Portal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    :root { --maroon:#7b1c1c; --maroon-dark:#5c1414; --gold:#c9a84c; }
+    *, ::before, ::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "Inter", system-ui, sans-serif; background: #f1f5f9; color: #0f172a; min-height: 100vh; }
+    a { color: inherit; text-decoration: none; }
+
+    /* TOPBAR */
+    .admin-topbar { background: #1e293b; padding: .875rem 1.5rem; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 40; }
+    .topbar-left { display: flex; align-items: center; gap: .875rem; }
+    .topbar-left img { height: 42px; border-radius: .375rem; }
+    .topbar-brand { color: #fff; font-size: .9375rem; font-weight: 600; }
+    .topbar-brand span { color: #818cf8; }
+    .topbar-right { display: flex; align-items: center; gap: 1rem; }
+    .role-badge { font-size: .72rem; font-weight: 700; padding: .25rem .75rem; border-radius: 9999px; }
+    .role-editor { background: #d1fae5; color: #065f46; }
+    .role-viewer { background: #ede9fe; color: #5b21b6; }
+    .user-info { font-size: .8125rem; color: #94a3b8; }
+    .btn-logout { font-size: .8125rem; padding: .375rem .875rem; border-radius: .375rem; background: #ef4444; color: #fff; border: none; cursor: pointer; }
+    .btn-logout:hover { background: #dc2626; }
+
+    /* LAYOUT */
+    .admin-layout { display: flex; min-height: calc(100vh - 62px); }
+
+    /* SIDEBAR */
+    .sidebar { width: 240px; background: #fff; border-right: 1px solid #e2e8f0; padding: 1.5rem 0; flex-shrink: 0; }
+    .sidebar-section { padding: 0 1rem; margin-bottom: 1.5rem; }
+    .sidebar-section-title { font-size: .6875rem; font-weight: 700; letter-spacing: .08em; color: #94a3b8; text-transform: uppercase; margin-bottom: .5rem; padding: 0 .5rem; }
+    .sidebar-link { display: flex; align-items: center; gap: .625rem; padding: .5rem .75rem; border-radius: .5rem; font-size: .875rem; color: #334155; cursor: pointer; transition: background .12s; }
+    .sidebar-link:hover, .sidebar-link.active { background: #fef3f3; color: var(--maroon); }
+    .sidebar-link i { width: 16px; text-align: center; font-size: .8125rem; }
+    .sidebar-count { margin-left: auto; font-size: .72rem; font-weight: 700; background: #fef3f3; color: var(--maroon); padding: .1rem .5rem; border-radius: 9999px; }
+
+    /* MAIN */
+    .admin-main { flex: 1; padding: 2rem; overflow-x: auto; }
+    .page-title { font-size: 1.375rem; font-weight: 700; color: #0f172a; margin-bottom: .25rem; }
+    .page-sub   { font-size: .875rem; color: #475569; margin-bottom: 1.5rem; }
+
+    /* STATS */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.75rem; }
+    .stat-card { background: #fff; border-radius: .875rem; padding: 1.25rem 1rem; border: 1px solid #e2e8f0; }
+    .stat-card .stat-val { font-size: 1.875rem; font-weight: 800; color: var(--maroon); }
+    .stat-card .stat-label { font-size: .8125rem; color: #64748b; margin-top: .25rem; }
+
+    /* TABLE CARD */
+    .table-card { background: #fff; border-radius: .875rem; border: 1px solid #e2e8f0; overflow: hidden; }
+    .table-header { padding: 1rem 1.25rem; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; }
+    .table-header h3 { font-size: 1rem; font-weight: 600; }
+    .ctrl-bar { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+    .ctrl-bar input, .ctrl-bar select { padding: .4375rem .75rem; border: 1px solid #e2e8f0; border-radius: .5rem; font-size: .8125rem; outline: none; }
+    .ctrl-bar input:focus, .ctrl-bar select:focus { border-color: var(--maroon); }
+    .ctrl-bar input { width: 220px; }
+    .btn-export { padding: .4375rem 1rem; background: var(--maroon); color: #fff; border: none; border-radius: .5rem; font-size: .8125rem; font-weight: 500; cursor: pointer; }
+    .btn-export:hover { background: var(--maroon-dark); }
+    .btn-refresh { padding: .4375rem .875rem; background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; border-radius: .5rem; font-size: .8125rem; cursor: pointer; }
+    .btn-refresh:hover { background: #e2e8f0; }
+
+    /* TABLE */
+    table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+    thead th { background: #f8fafc; padding: .625rem 1rem; text-align: left; font-weight: 600; color: #475569; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+    tbody tr { border-bottom: 1px solid #f1f5f9; transition: background .1s; }
+    tbody tr:hover { background: #fdf9f9; }
+    tbody td { padding: .625rem 1rem; color: #334155; vertical-align: middle; }
+    .badge-pos { font-size: .7rem; font-weight: 600; padding: .15rem .5rem; border-radius: 9999px; }
+    .bp-ra { background: #ede9fe; color: #6d28d9; }
+    .bp-ta { background: #fef3c7; color: #92400e; }
+    .status-badge { font-size: .7rem; font-weight: 600; padding: .15rem .5rem; border-radius: 9999px; }
+    .s-pending  { background: #fef9c3; color: #854d0e; }
+    .s-shortlisted { background: #d1fae5; color: #065f46; }
+    .s-rejected { background: #fce7f3; color: #831843; }
+    .s-selected { background: #dbeafe; color: #1e40af; }
+
+    /* ACTION BUTTONS */
+    .act-btns { display: flex; gap: .3rem; flex-wrap: nowrap; }
+    .btn-view { padding: .3rem .6rem; font-size: .72rem; border-radius: .375rem; border: 1px solid #e2e8f0; background: #fff; cursor: pointer; color: #334155; }
+    .btn-view:hover { background: #f1f5f9; }
+    .btn-edit { padding: .3rem .6rem; font-size: .72rem; border-radius: .375rem; background: var(--maroon); color: #fff; border: none; cursor: pointer; }
+    .btn-edit:hover { background: var(--maroon-dark); }
+    .btn-del { padding: .3rem .6rem; font-size: .72rem; border-radius: .375rem; background: #ef4444; color: #fff; border: none; cursor: pointer; }
+    .btn-del:hover { background: #dc2626; }
+
+    /* DETAIL MODAL */
+    .overlay { display: none; position: fixed; inset: 0; z-index: 200; background: rgba(15,23,42,.55); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 1rem; }
+    .overlay.active { display: flex; }
+    .modal-box { background: #fff; border-radius: 1.25rem; padding: 0; width: 100%; max-width: 800px; max-height: 92vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 25px 50px -12px rgba(0,0,0,.25); animation: fadeUp .2s ease; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+    .modal-head { padding: 1.25rem 1.5rem; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .modal-head h2 { font-size: 1rem; font-weight: 700; }
+    .modal-close { background: none; border: none; font-size: 1.375rem; color: #94a3b8; cursor: pointer; line-height: 1; }
+    .modal-close:hover { color: #0f172a; }
+    .modal-body { padding: 1.5rem; overflow-y: auto; flex: 1; }
+    .modal-foot { padding: 1rem 1.5rem; border-top: 1px solid #e2e8f0; display: flex; gap: .75rem; justify-content: flex-end; flex-shrink: 0; }
+    .modal-foot button { padding: .5rem 1.25rem; border-radius: .5rem; font-size: .875rem; font-weight: 500; cursor: pointer; border: none; }
+    .btn-cancel-modal { background: #f1f5f9; color: #334155; }
+    .btn-cancel-modal:hover { background: #e2e8f0; }
+    .btn-save-modal { background: var(--maroon); color: #fff; }
+    .btn-save-modal:hover { background: var(--maroon-dark); }
+
+    /* DETAIL SECTIONS */
+    .dsec-title { font-size: .72rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: #94a3b8; margin: 1.25rem 0 .75rem; border-bottom: 1px solid #f1f5f9; padding-bottom: .375rem; }
+    .dsec-title:first-child { margin-top: 0; }
+    .dfgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: .875rem; }
+    .dfield label { font-size: .72rem; font-weight: 500; color: #94a3b8; display: block; margin-bottom: .175rem; }
+    .dfield .val  { font-size: .875rem; color: #1e293b; font-weight: 500; }
+    .dfield input, .dfield select, .dfield textarea { width: 100%; padding: .375rem .625rem; border: 1px solid #cbd5e1; border-radius: .375rem; font-size: .875rem; font-family: inherit; outline: none; }
+    .dfield input:focus, .dfield select:focus, .dfield textarea:focus { border-color: var(--maroon); }
+    .dfield textarea { resize: vertical; }
+    .file-link { color: var(--maroon); font-size: .8125rem; }
+
+    /* STATUS SELECT IN MODAL */
+    .status-select { padding: .25rem .5rem; border: 1px solid #e2e8f0; border-radius: .375rem; font-size: .8125rem; outline: none; font-family: inherit; }
+    .status-select:focus { border-color: var(--maroon); }
+
+    /* EMPTY STATE */
+    .empty-state { text-align: center; padding: 4rem 2rem; color: #94a3b8; }
+    .empty-state i { font-size: 3rem; margin-bottom: 1rem; display: block; }
+
+    /* LOADING */
+    .loading-row td { text-align: center; color: #94a3b8; padding: 3rem !important; }
+    .spinner { display: inline-block; width: 18px; height: 18px; border: 2.5px solid rgba(123,28,28,.2); border-top-color: var(--maroon); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+
+    /* TOAST */
+    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 999; color: #fff; padding: .75rem 1.25rem; border-radius: .75rem; font-size: .875rem; font-weight: 500; box-shadow: 0 10px 30px rgba(0,0,0,.2); display: none; }
+    .toast.show { display: block; animation: slideIn .2s ease; }
+    @keyframes slideIn { from{transform:translateX(100%)} to{transform:translateX(0)} }
+    .toast-success { background: #059669; }
+    .toast-error   { background: #dc2626; }
+    .toast-info    { background: #3b82f6; }
+
+    @media(max-width:768px){ .sidebar { display: none; } }
+  </style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="admin-topbar">
+  <div class="topbar-left">
+    <img src="assets/psgcas logo-2.png" alt="PSG CAS">
+    <span class="topbar-brand">PSG CAS <span>Admin Portal</span></span>
+  </div>
+  <div class="topbar-right">
+    <span class="role-badge" id="role-badge">…</span>
+    <span class="user-info" id="user-email">…</span>
+    <button class="btn-logout" id="btn-logout">Sign Out</button>
+  </div>
+</div>
+
+<!-- LAYOUT -->
+<div class="admin-layout">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Overview</div>
+      <div class="sidebar-link active" id="nav-dashboard" onclick="showPage('dashboard')"><i class="fa-solid fa-gauge"></i> Dashboard</div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Applications</div>
+      <div class="sidebar-link" id="nav-all" onclick="showPage('all')"><i class="fa-solid fa-list"></i> All Applications <span class="sidebar-count" id="cnt-all">0</span></div>
+      <div class="sidebar-link" id="nav-ra"  onclick="showPage('ra')"><i class="fa-solid fa-flask"></i> Research Assistant <span class="sidebar-count" id="cnt-ra">0</span></div>
+      <div class="sidebar-link" id="nav-ta"  onclick="showPage('ta')"><i class="fa-solid fa-chalkboard-teacher"></i> Teaching Assistant <span class="sidebar-count" id="cnt-ta">0</span></div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="admin-main">
+
+    <!-- DASHBOARD -->
+    <div id="page-dashboard">
+      <p class="page-title">Dashboard</p>
+      <p class="page-sub">Welcome to the PSG CAS Admin Portal.</p>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-val" id="s-total">–</div><div class="stat-label">Total Applications</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-ra" style="color:#6d28d9;">–</div><div class="stat-label">Research Assistant</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-ta" style="color:#b45309;">–</div><div class="stat-label">Teaching Assistant</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-today" style="color:#059669;">–</div><div class="stat-label">Submitted Today</div></div>
+      </div>
+      <div class="table-card">
+        <div class="table-header"><h3>Recent Applications</h3><button class="btn-refresh" onclick="loadDashboard()">&#8635; Refresh</button></div>
+        <div id="recent-wrap" style="overflow-x:auto;"></div>
+      </div>
+    </div>
+
+    <!-- ALL APPLICATIONS -->
+    <div id="page-all" style="display:none;">
+      <p class="page-title">All Applications</p>
+      <p class="page-sub">All submitted applications.</p>
+      <div class="table-card">
+        <div class="table-header">
+          <h3>Applications <span id="all-count-label" style="color:#94a3b8;font-weight:400;font-size:.875rem;"></span></h3>
+          <div class="ctrl-bar">
+            <input type="text" id="search-all" placeholder="Search name, email, dept…" oninput="loadAll()">
+            <select id="filter-dept" onchange="loadAll()"><option value="">All Departments</option></select>
+            <select id="filter-pos" onchange="loadAll()"><option value="">All Positions</option><option value="Research Assistant">Research Assistant</option><option value="Teaching Assistant">Teaching Assistant</option></select>
+            <select id="filter-status" onchange="loadAll()"><option value="">All Status</option><option>Pending</option><option>Shortlisted</option><option>Selected</option><option>Rejected</option></select>
+            <button class="btn-refresh" onclick="loadAll()">&#8635;</button>
+            <button class="btn-export" onclick="exportCSV()">&#8595; CSV</button>
+          </div>
+        </div>
+        <div id="all-wrap" style="overflow-x:auto;"></div>
+      </div>
+    </div>
+
+    <!-- RA -->
+    <div id="page-ra" style="display:none;">
+      <p class="page-title">Research Assistant Applications</p>
+      <p class="page-sub"></p>
+      <div class="table-card">
+        <div class="table-header"><h3>Research Assistant</h3><div class="ctrl-bar"><input type="text" id="search-ra" placeholder="Search…" oninput="loadRA()"><button class="btn-refresh" onclick="loadRA()">&#8635;</button></div></div>
+        <div id="ra-wrap" style="overflow-x:auto;"></div>
+      </div>
+    </div>
+
+    <!-- TA -->
+    <div id="page-ta" style="display:none;">
+      <p class="page-title">Teaching Assistant Applications</p>
+      <p class="page-sub"></p>
+      <div class="table-card">
+        <div class="table-header"><h3>Teaching Assistant</h3><div class="ctrl-bar"><input type="text" id="search-ta" placeholder="Search…" oninput="loadTA()"><button class="btn-refresh" onclick="loadTA()">&#8635;</button></div></div>
+        <div id="ta-wrap" style="overflow-x:auto;"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- DETAIL / EDIT MODAL -->
+<div class="overlay" id="detail-overlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2 id="modal-title">Applicant Details</h2>
+      <button class="modal-close" id="modal-close">&times;</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-foot" id="modal-foot">
+      <button class="btn-cancel-modal" id="modal-cancel">Close</button>
+      <button class="btn-save-modal" id="modal-save" style="display:none;">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── AUTH GUARD ──────────────────────────────
+  const token = sessionStorage.getItem('psg_token');
+  const role  = sessionStorage.getItem('psg_role');
+  const email = sessionStorage.getItem('psg_email');
+  if (!token || !role) { window.location.href = 'index.html'; }
+
+  // Apply role badge
+  const rb = document.getElementById('role-badge');
+  document.getElementById('user-email').textContent = email;
+  if (role === 'editor') { rb.textContent = 'Editor (View + Edit)'; rb.className = 'role-badge role-editor'; }
+  else                   { rb.textContent = 'Viewer (Read-Only)';   rb.className = 'role-badge role-viewer'; }
+
+  // Logout
+  document.getElementById('btn-logout').addEventListener('click', () => {
+    sessionStorage.clear();
+    window.location.href = 'index.html';
+  });
+
+  // ── API HELPER ──────────────────────────────
+  async function api(path, options = {}) {
+    const res = await fetch(path, {
+      ...options,
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json', ...(options.headers || {}) }
+    });
+    if (res.status === 401) { sessionStorage.clear(); window.location.href = 'index.html'; }
+    return res;
+  }
+
+  // ── TOAST ───────────────────────────────────
+  function toast(msg, type = 'info') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast show toast-${type}`;
+    setTimeout(() => t.className = 'toast', 3000);
+  }
+
+  // ── STATS ───────────────────────────────────
+  async function loadStats() {
+    try {
+      const res  = await api('/api/stats');
+      const data = await res.json();
+      document.getElementById('s-total').textContent = data.total;
+      document.getElementById('s-ra').textContent    = data.research_assistant;
+      document.getElementById('s-ta').textContent    = data.teaching_assistant;
+      document.getElementById('s-today').textContent = data.today;
+      document.getElementById('cnt-all').textContent = data.total;
+      document.getElementById('cnt-ra').textContent  = data.research_assistant;
+      document.getElementById('cnt-ta').textContent  = data.teaching_assistant;
+    } catch (e) { console.error(e); }
+  }
+
+  // ── BUILD TABLE ─────────────────────────────
+  function buildTable(apps, wrap) {
+    if (!apps.length) {
+      wrap.innerHTML = '<div class="empty-state"><i class="fa-solid fa-inbox"></i>No applications found.</div>';
+      return;
+    }
+    const h = `<table>
+      <thead><tr><th>#</th><th>Name</th><th>Position</th><th>Department</th><th>Email</th><th>Mobile</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${apps.map((a, i) => {
+        const posClass = (a.position || '').includes('Research') ? 'bp-ra' : 'bp-ta';
+        const date = a.submitted_at ? new Date(a.submitted_at).toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'}) : '—';
+        const sc = {Pending:'s-pending', Shortlisted:'s-shortlisted', Selected:'s-selected', Rejected:'s-rejected'}[a.status] || 's-pending';
+        return `<tr>
+          <td>${i + 1}</td>
+          <td style="font-weight:600;">${esc(a.name || '—')}</td>
+          <td><span class="badge-pos ${posClass}">${esc(a.position || '—')}</span></td>
+          <td>${esc(a.department || '—')}</td>
+          <td>${esc(a.email || '—')}</td>
+          <td>${esc(a.mobile_no || '—')}</td>
+          <td>${date}</td>
+          <td><span class="status-badge ${sc}">${esc(a.status || 'Pending')}</span></td>
+          <td><div class="act-btns">
+            <button class="btn-view" onclick="openModal(${a.id}, false)">View</button>
+            ${role === 'editor' ? `<button class="btn-edit" onclick="openModal(${a.id}, true)">Edit</button>
+            <button class="btn-del" onclick="deleteApp(${a.id})">Del</button>` : ''}
+          </div></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+    wrap.innerHTML = h;
+  }
+
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  // ── PAGE NAVIGATION ─────────────────────────
+  const pages = ['dashboard', 'all', 'ra', 'ta'];
+  function showPage(p) {
+    pages.forEach(pg => {
+      document.getElementById('page-' + pg).style.display = 'none';
+      document.getElementById('nav-' + pg).classList.remove('active');
+    });
+    document.getElementById('page-' + p).style.display = '';
+    document.getElementById('nav-' + p).classList.add('active');
+    loadStats();
+    if (p === 'dashboard') loadDashboard();
+    if (p === 'all')       { loadDepts(); loadAll(); }
+    if (p === 'ra')        loadRA();
+    if (p === 'ta')        loadTA();
+  }
+
+  // ── LOADERS ─────────────────────────────────
+  async function loadDashboard() {
+    await loadStats();
+    const wrap = document.getElementById('recent-wrap');
+    wrap.innerHTML = '<table><thead><tr><th>#</th><th>Name</th><th>Position</th><th>Department</th><th>Email</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr class="loading-row"><td colspan="8"><span class="spinner"></span> Loading…</td></tr></tbody></table>';
+    const res  = await api('/api/applications');
+    const data = await res.json();
+    const recent = (data.applications || []).slice(0, 10);
+    buildTable(recent, wrap);
+  }
+
+  async function loadAll() {
+    const wrap = document.getElementById('all-wrap');
+    const q    = document.getElementById('search-all').value;
+    const dept = document.getElementById('filter-dept').value;
+    const pos  = document.getElementById('filter-pos').value;
+    const stat = document.getElementById('filter-status').value;
+    let url    = '/api/applications?';
+    if (q)    url += `q=${encodeURIComponent(q)}&`;
+    if (dept) url += `department=${encodeURIComponent(dept)}&`;
+    if (pos)  url += `position=${encodeURIComponent(pos)}&`;
+    if (stat) url += `status=${encodeURIComponent(stat)}&`;
+    const res  = await api(url);
+    const data = await res.json();
+    const apps = data.applications || [];
+    document.getElementById('all-count-label').textContent = `(${apps.length} records)`;
+    buildTable(apps, wrap);
+  }
+
+  async function loadRA() {
+    const wrap = document.getElementById('ra-wrap');
+    const q    = document.getElementById('search-ra').value;
+    const res  = await api(`/api/applications?position=Research+Assistant${q ? '&q=' + encodeURIComponent(q) : ''}`);
+    const data = await res.json();
+    buildTable(data.applications || [], wrap);
+  }
+
+  async function loadTA() {
+    const wrap = document.getElementById('ta-wrap');
+    const q    = document.getElementById('search-ta').value;
+    const res  = await api(`/api/applications?position=Teaching+Assistant${q ? '&q=' + encodeURIComponent(q) : ''}`);
+    const data = await res.json();
+    buildTable(data.applications || [], wrap);
+  }
+
+  async function loadDepts() {
+    const sel = document.getElementById('filter-dept');
+    if (sel.options.length > 1) return;
+    const res  = await api('/api/departments');
+    const data = await res.json();
+    (data.departments || []).forEach(d => {
+      const o = document.createElement('option'); o.value = d; o.textContent = d; sel.appendChild(o);
+    });
+  }
+
+  // ── DELETE ───────────────────────────────────
+  async function deleteApp(id) {
+    if (role !== 'editor') { toast('No permission', 'error'); return; }
+    if (!confirm('Permanently delete this application? This cannot be undone.')) return;
+    const res = await api(`/api/applications/${id}`, { method: 'DELETE' });
+    if (res.ok) { toast('Application deleted', 'error'); reloadCurrentPage(); }
+    else { const d = await res.json(); toast(d.error || 'Delete failed', 'error'); }
+  }
+
+  function reloadCurrentPage() {
+    const active = document.querySelector('.sidebar-link.active');
+    if (active) showPage(active.id.replace('nav-', ''));
+  }
+
+  // ── DETAIL / EDIT MODAL ─────────────────────
+  let currentId = null, editMode = false;
+
+  const SECTIONS = {
+    'Application Info': ['position','department'],
+    'Personal Details': ['name','dob','gender','mother_tongue','religion','community','category','marital_status','spouse_name','father_name','diff_abled','nature','aadhaar_no','pan_no'],
+    'Contact': ['mobile_no','email','native_address','native_city','native_state','native_country','native_pincode','local_address','local_city','local_state','local_country','local_pincode'],
+    'Academic': ['achivements','net','set_slet','nss','ncc','naac','iqac','iso'],
+    'Research': ['sci','scopus','ugc','others','scopus_id','h_index_google','h_index_scopus','books_published_national','books_published_international','minor_projects','major_projects','patents_applied','patents_published','patents_granted','consultancy'],
+    'References': ['name_1','address_1','designation_1','mobile_1','email_1','name_2','address_2','designation_2','mobile_2','email_2'],
+    'Other Info': ['last_pay','pay_expected','join_time','relative','already_attended','huk','comments'],
+  };
+
+  const LABELS = {
+    position:'Position Applied',department:'Department',name:'Full Name',dob:'Date of Birth',gender:'Gender',
+    mother_tongue:'Mother Tongue',religion:'Religion',community:'Community',category:'Category',
+    marital_status:'Marital Status',spouse_name:'Spouse Name',father_name:"Father's Name",
+    diff_abled:'Physically Challenged',nature:'Nature of Challenge',aadhaar_no:'Aadhaar No.',pan_no:'PAN No.',
+    mobile_no:'Mobile No.',email:'Email',native_address:'Permanent Address',native_city:'Perm. City',
+    native_state:'Perm. State',native_country:'Perm. Country',native_pincode:'Perm. Pincode',
+    local_address:'Comm. Address',local_city:'Comm. City',local_state:'Comm. State',
+    local_country:'Comm. Country',local_pincode:'Comm. Pincode',achivements:'Academic Achievements',
+    net:'NET',set_slet:'SET/SLET',nss:'NSS',ncc:'NCC',naac:'NAAC',iqac:'IQAC',iso:'ISO',
+    sci:'SCI/WOS Papers',scopus:'Scopus Papers',ugc:'UGC Care Papers',others:'Other Papers',
+    scopus_id:'Scopus ID',h_index_google:'H-Index (Google Scholar)',h_index_scopus:'H-Index (Scopus)',
+    books_published_national:'Books Published (Natl)',books_published_international:'Books Published (Intl)',
+    minor_projects:'Minor Projects',major_projects:'Major Projects',patents_applied:'Patents Applied',
+    patents_published:'Patents Published',patents_granted:'Patents Granted',consultancy:'Consultancy',
+    name_1:'Ref 1 Name',address_1:'Ref 1 Address',designation_1:'Ref 1 Designation',mobile_1:'Ref 1 Mobile',email_1:'Ref 1 Email',
+    name_2:'Ref 2 Name',address_2:'Ref 2 Address',designation_2:'Ref 2 Designation',mobile_2:'Ref 2 Mobile',email_2:'Ref 2 Email',
+    last_pay:'Last Monthly Pay',pay_expected:'Expected Pay',join_time:'Joining Time',
+    relative:'Relatives in PSG',already_attended:'Prev. Interview at PSGCAS',huk:'Vacancy Source',comments:'Comments',
+  };
+
+  const EDITABLE_FIELDS = new Set([
+    'status','admin_notes','name','email','mobile_no','department','position',
+    'dob','gender','mother_tongue','religion','community','category','marital_status',
+    'spouse_name','father_name','diff_abled','nature','aadhaar_no','pan_no',
+    'native_address','native_city','native_state','native_country','native_pincode',
+    'local_address','local_city','local_state','local_country','local_pincode','achivements',
+    'sci','scopus','ugc','others','scopus_id','h_index_google','h_index_scopus','consultancy',
+    'last_pay','pay_expected','join_time','relative','already_attended','huk','comments',
+    'name_1','address_1','designation_1','mobile_1','email_1',
+    'name_2','address_2','designation_2','mobile_2','email_2',
+  ]);
+
+  async function openModal(id, isEdit) {
+    currentId = id;
+    editMode  = isEdit && role === 'editor';
+    const res  = await api(`/api/applications/${id}`);
+    if (!res.ok) { toast('Failed to load application', 'error'); return; }
+    const app  = await res.json();
+
+    document.getElementById('modal-title').textContent = (app.name || 'Applicant') + ' — ' + (app.position || '');
+    document.getElementById('modal-save').style.display = editMode ? '' : 'none';
+
+    let html = '';
+
+    // Status + Admin Notes (editor only at top)
+    if (editMode) {
+      html += `<div class="dsec-title">Admin Controls</div><div class="dfgrid">
+        <div class="dfield"><label>Status</label>
+          <select class="status-select" data-key="status">
+            ${['Pending','Shortlisted','Selected','Rejected'].map(s => `<option ${app.status===s?'selected':''}>${s}</option>`).join('')}
+          </select></div>
+        <div class="dfield col-span-2"><label>Admin Notes</label>
+          <textarea data-key="admin_notes" rows="2">${app.admin_notes || ''}</textarea></div>
+      </div>`;
+    } else if (app.status || app.admin_notes) {
+      html += `<div class="dsec-title">Admin Info</div><div class="dfgrid">
+        <div class="dfield"><label>Status</label><div class="val">${app.status || 'Pending'}</div></div>
+        ${app.admin_notes ? `<div class="dfield"><label>Admin Notes</label><div class="val">${esc(app.admin_notes)}</div></div>` : ''}
+      </div>`;
+    }
+
+    // Applicant sections
+    Object.entries(SECTIONS).forEach(([sec, keys]) => {
+      html += `<div class="dsec-title">${sec}</div><div class="dfgrid">`;
+      keys.forEach(k => {
+        const label = LABELS[k] || k;
+        const val   = app[k] !== undefined && app[k] !== null ? String(app[k]) : '—';
+        html += `<div class="dfield"><label>${label}</label>`;
+        if (editMode && EDITABLE_FIELDS.has(k)) {
+          if (val.length > 80 || k === 'achivements' || k === 'consultancy' || k === 'relative' || k === 'comments') {
+            html += `<textarea data-key="${k}" rows="3">${val === '—' ? '' : esc(val)}</textarea>`;
+          } else {
+            html += `<input data-key="${k}" value="${val === '—' ? '' : esc(val)}">`;
+          }
+        } else {
+          html += `<div class="val">${esc(val)}</div>`;
+        }
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+
+    // Files
+    html += `<div class="dsec-title">Uploaded Files</div><div class="dfgrid">`;
+    if (app.photo_path)  html += `<div class="dfield"><label>Photo</label><a href="${app.photo_path}" target="_blank" class="file-link">&#128247; View Photo</a></div>`;
+    if (app.resume_path) html += `<div class="dfield"><label>Resume</label><a href="${app.resume_path}" target="_blank" class="file-link">&#128196; View Resume</a></div>`;
+    if (app.papers_path) html += `<div class="dfield"><label>Publications List</label><a href="${app.papers_path}" target="_blank" class="file-link">&#128202; Download</a></div>`;
+    html += '</div>';
+
+    // Sub-tables (JSON)
+    ['languages','education','teaching_experience','industry_experience','projects','patents','pdf_details'].forEach(k => {
+      if (!app[k]) return;
+      try {
+        const arr = JSON.parse(app[k]);
+        if (!arr.length) return;
+        html += `<div class="dsec-title">${k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</div>`;
+        html += `<pre style="font-size:.75rem;background:#f8fafc;border-radius:.5rem;padding:.75rem;overflow-x:auto;white-space:pre-wrap;">${JSON.stringify(arr, null, 2)}</pre>`;
+      } catch {}
+    });
+
+    document.getElementById('modal-body').innerHTML = html;
+    document.getElementById('detail-overlay').classList.add('active');
+  }
+
+  // Save modal
+  document.getElementById('modal-save').addEventListener('click', async () => {
+    if (!editMode || role !== 'editor') return;
+    const updates = {};
+    document.querySelectorAll('#modal-body [data-key]').forEach(el => {
+      updates[el.dataset.key] = el.value;
+    });
+    const res = await api(`/api/applications/${currentId}`, {
+      method: 'PUT', body: JSON.stringify(updates)
+    });
+    if (res.ok) {
+      toast('Application updated!', 'success');
+      document.getElementById('detail-overlay').classList.remove('active');
+      reloadCurrentPage();
+    } else {
+      const d = await res.json();
+      toast(d.error || 'Save failed', 'error');
+    }
+  });
+
+  ['modal-close','modal-cancel'].forEach(id => {
+    document.getElementById(id).addEventListener('click', () => document.getElementById('detail-overlay').classList.remove('active'));
+  });
+  document.getElementById('detail-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('active'); });
+
+  // ── EXPORT CSV ───────────────────────────────
+  async function exportCSV() {
+    const res = await fetch('/api/export/csv', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!res.ok) { toast('No data to export', 'info'); return; }
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'psgcas_applications.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ── INIT ─────────────────────────────────────
+  loadStats();
+  loadDashboard();
+</script>
+</body>
+</html>

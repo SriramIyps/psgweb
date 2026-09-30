@@ -1,0 +1,15 @@
+# Uploaded files (user-submitted, not tracked)
+uploads/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment
+.env
+*.env
+
+# OS files
+.DS_Store
+Thumbs.db

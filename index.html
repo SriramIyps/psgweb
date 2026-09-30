@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Official Careers page for PSG College of Arts &amp; Science, Coimbatore. Explore job openings and career opportunities.">
+  <meta name="author" content="PSG College of Arts &amp; Science">
+  <meta name="keywords" content="PSG College of Arts &amp; Science, Careers, Coimbatore, Job Openings, Faculty Positions, Non-Teaching Positions, PSGCAS Jobs, PSGCAS Career Opportunities">
+  <title>PSG College of Arts &amp; Science | Careers</title>
+
+  <!-- Google Fonts: Geist-like -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+  <style>
+    /* ── RESET + BASE ──────────────────────── */
+    *, ::before, ::after { box-sizing: border-box; margin: 0; padding: 0; border-width: 0; border-style: solid; border-color: #e5e7eb; }
+    html { line-height: 1.5; -webkit-text-size-adjust: 100%; font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; line-height: inherit; background-color: #f8fafc; color: #0f172a; }
+    a { color: inherit; text-decoration: inherit; }
+    img, svg, video { display: block; vertical-align: middle; max-width: 100%; height: auto; }
+    h1,h2,h3,h4,h5,h6 { font-size: inherit; font-weight: inherit; }
+    button { cursor: pointer; font-family: inherit; }
+    [hidden] { display: none; }
+
+    /* ── UTILITIES ─────────────────────────── */
+    .mx-auto   { margin-left: auto; margin-right: auto; }
+    .mt-2      { margin-top: .5rem; }
+    .mt-3      { margin-top: .75rem; }
+    .mt-4      { margin-top: 1rem; }
+    .mt-5      { margin-top: 1.25rem; }
+    .mb-12     { margin-bottom: 3rem; }
+    .mt-12     { margin-top: 3rem; }
+    .max-w-7xl { max-width: 80rem; }
+    .max-w-3xl { max-width: 48rem; }
+    .max-w-xl  { max-width: 36rem; }
+    .w-full    { width: 100%; }
+    .w-auto    { width: auto; }
+    .h-full    { height: 100%; }
+    .flex      { display: flex; }
+    .inline-flex { display: inline-flex; }
+    .grid      { display: grid; }
+    .hidden    { display: none; }
+    .block     { display: block; }
+    .items-center    { align-items: center; }
+    .justify-center  { justify-content: center; }
+    .justify-between { justify-content: space-between; }
+    .flex-col  { flex-direction: column; }
+    .flex-1    { flex: 1 1 0%; }
+    .gap-2     { gap: .5rem; }
+    .gap-3     { gap: .75rem; }
+    .gap-6     { gap: 1.5rem; }
+    .gap-8     { gap: 2rem; }
+    .text-center { text-align: center; }
+    .font-medium  { font-weight: 500; }
+    .font-semibold{ font-weight: 600; }
+    .font-bold    { font-weight: 700; }
+    .leading-tight   { line-height: 1.25; }
+    .leading-relaxed { line-height: 1.625; }
+    .tracking-tight  { letter-spacing: -.025em; }
+    .rounded-full { border-radius: 9999px; }
+    .rounded-lg   { border-radius: .5rem; }
+    .rounded-xl   { border-radius: .75rem; }
+    .rounded-2xl  { border-radius: 1rem; }
+    .rounded-md   { border-radius: .375rem; }
+    .border       { border-width: 1px; }
+    .border-b     { border-bottom-width: 1px; }
+    .overflow-hidden { overflow: hidden; }
+    .relative { position: relative; }
+    .absolute { position: absolute; }
+    .fixed    { position: fixed; }
+    .sticky   { position: sticky; }
+    .inset-0  { inset: 0; }
+    .inset-x-0{ left: 0; right: 0; }
+    .inset-y-0{ top: 0; bottom: 0; }
+    .top-0    { top: 0; }
+    .top-20   { top: 5rem; }
+    .left-4   { left: 1rem; }
+    .right-4  { right: 1rem; }
+    .bottom-4 { bottom: 1rem; }
+    .left-1\/2{ left: 50%; }
+    .z-10  { z-index: 10; }
+    .z-30  { z-index: 30; }
+    .z-50  { z-index: 50; }
+    .-z-10 { z-index: -10; }
+    .-z-20 { z-index: -20; }
+    .opacity-30 { opacity: .3; }
+    .opacity-40 { opacity: .4; }
+    .opacity-60 { opacity: .6; }
+    .p-1\.5   { padding: .375rem; }
+    .p-8      { padding: 2rem; }
+    .px-2     { padding-left: .5rem;  padding-right: .5rem; }
+    .px-3     { padding-left: .75rem; padding-right: .75rem; }
+    .px-4     { padding-left: 1rem;   padding-right: 1rem; }
+    .px-5     { padding-left: 1.25rem;padding-right: 1.25rem; }
+    .px-6     { padding-left: 1.5rem; padding-right: 1.5rem; }
+    .py-1     { padding-top: .25rem;   padding-bottom: .25rem; }
+    .py-1\.5  { padding-top: .375rem;  padding-bottom: .375rem; }
+    .py-2\.5  { padding-top: .625rem;  padding-bottom: .625rem; }
+    .py-3     { padding-top: .75rem;   padding-bottom: .75rem; }
+    .py-10    { padding-top: 2.5rem;   padding-bottom: 2.5rem; }
+    .py-12    { padding-top: 3rem;     padding-bottom: 3rem; }
+    .py-16    { padding-top: 4rem;     padding-bottom: 4rem; }
+    .space-y-1 > :not([hidden]) ~ :not([hidden]) { margin-top: .25rem; }
+    .text-xs  { font-size: .75rem;   line-height: 1rem; }
+    .text-sm  { font-size: .875rem;  line-height: 1.25rem; }
+    .text-lg  { font-size: 1.125rem; line-height: 1.75rem; }
+    .text-xl  { font-size: 1.25rem;  line-height: 1.75rem; }
+    .text-2xl { font-size: 1.5rem;   line-height: 2rem; }
+    .text-14  { font-size: 14px; }
+
+    /* COLORS */
+    .bg-white        { background-color: #fff; }
+    .bg-white\/90    { background-color: rgba(255,255,255,.9); }
+    .bg-slate-50     { background-color: #f8fafc; }
+    .bg-slate-200    { background-color: #e2e8f0; }
+    .bg-indigo-50    { background-color: #eef2ff; }
+    .bg-indigo-600   { background-color: #4f46e5; }
+    .bg-emerald-50   { background-color: #ecfdf5; }
+    .bg-blue-600     { background-color: #2563eb; }
+    .border-slate-200{ border-color: #e2e8f0; }
+    .border-slate-300{ border-color: #cbd5e1; }
+    .text-white      { color: #fff; }
+    .text-slate-600  { color: #475569; }
+    .text-slate-700  { color: #334155; }
+    .text-slate-800  { color: #1e293b; }
+    .text-slate-900  { color: #0f172a; }
+    .text-indigo-600 { color: #4f46e5; }
+    .text-indigo-700 { color: #4338ca; }
+    .text-blue-600   { color: #2563eb; }
+    .text-blue-700   { color: #1d4ed8; }
+    .text-emerald-700{ color: #047857; }
+
+    /* SHADOWS */
+    .shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+    .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -4px rgba(0,0,0,.1); }
+
+    /* TRANSITIONS */
+    .transition { transition-property: color, background-color, border-color, opacity, box-shadow, transform; transition-timing-function: cubic-bezier(.4,0,.2,1); transition-duration: 150ms; }
+
+    /* BACKDROP */
+    .backdrop-blur { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+
+    /* BLUR */
+    .blur-3xl { filter: blur(64px); }
+
+    /* HOVER STATES */
+    .hover\:bg-slate-100:hover { background-color: #f1f5f9; }
+    .hover\:bg-slate-50:hover  { background-color: #f8fafc; }
+    .hover\:bg-indigo-700:hover{ background-color: #4338ca; }
+    .hover\:bg-blue-700:hover  { background-color: #1d4ed8; }
+    .hover\:bg-blue-50:hover   { background-color: #eff6ff; }
+    .hover\:text-indigo-600:hover { color: #4f46e5; }
+    .hover\:shadow-xl:hover { box-shadow: 0 20px 25px -5px rgba(0,0,0,.1), 0 8px 10px -6px rgba(0,0,0,.1); }
+
+    /* FOCUS */
+    .focus\:outline-none:focus { outline: none; }
+
+    /* H1 SPECIAL */
+    .h1-size { font-size: 1.5rem; }
+    @media(min-width:640px)  { .h1-size { font-size: 1.875rem; } .sm\:block { display: block; } .sm\:flex { display: flex; } .sm\:hidden { display: none; } .sm\:py-14 { padding-top: 3.5rem; padding-bottom: 3.5rem; } .sm\:text-3xl { font-size: 1.875rem; line-height: 2.25rem; } .sm\:text-base { font-size: 1rem; line-height: 1.5rem; } }
+    @media(min-width:768px)  { .h1-size { font-size: 2.25rem; } .md\:grid-cols-2 { grid-template-columns: repeat(2,minmax(0,1fr)); } .md\:py-16 { padding-top: 4rem; padding-bottom: 4rem; } .md\:text-base { font-size: 1rem; } .md\:text-4xl { font-size: 2.25rem; line-height: 2.5rem; } }
+
+    /* GRID BG */
+    .grid-bg { background-image: linear-gradient(to right, rgba(15,23,42,.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(15,23,42,.06) 1px, transparent 1px); background-size: 36px 36px; }
+
+    /* GRADIENT HELPERS */
+    .pulse-line-h { background-image: linear-gradient(to right, transparent, #818cf8, transparent); }
+    .pulse-line-v { background-image: linear-gradient(to bottom, transparent, #a5b4fc, transparent); }
+    .grad-blob    { background-image: linear-gradient(to bottom right, rgba(99,102,241,.3), rgba(168,85,247,.2), rgba(236,72,153,.2)); }
+    .h-px { height: 1px; }
+    .w-px { width: 1px; }
+    .h-320 { height: 320px; }
+    .w-480 { width: 480px; }
+    .-translate-x-1\/2 { transform: translateX(-50%); }
+
+    /* PULSE ANIMATIONS */
+    @keyframes pulse-slow   { 0%,100%{opacity:.4} 50%{opacity:.7} }
+    @keyframes pulse-slower { 0%,100%{opacity:.3} 50%{opacity:.55} }
+    .animate-pulse-slow   { animation: pulse-slow   3s ease-in-out infinite; }
+    .animate-pulse-slower { animation: pulse-slower 5s ease-in-out infinite; }
+
+    /* INLINE-FLEX FOR LINKS */
+    .inline-flex-mt5 { display: inline-flex; margin-top: 1.25rem; font-weight: 600; }
+
+    /* ── LOGIN MODAL ─────────────────────────── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 100;
+      background: rgba(15,23,42,.6); backdrop-filter: blur(6px);
+      align-items: center; justify-content: center; padding: 1rem;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-box {
+      background: #fff; border-radius: 1rem; width: 100%; max-width: 420px;
+      padding: 2rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,.35);
+      animation: fadeIn .2s ease; position: relative;
+    }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+    .modal-logo { display: flex; align-items: center; gap: .75rem; margin-bottom: 1.5rem; }
+    .modal-logo img { height: 44px; border-radius: .375rem; }
+    .modal-logo-brand { font-size: .9rem; font-weight: 600; color: #0f172a; }
+    .modal-logo-sub   { font-size: .75rem; color: #94a3b8; }
+    .modal-title  { font-size: 1.25rem; font-weight: 700; color: #0f172a; margin-bottom: .375rem; }
+    .modal-sub    { font-size: .8125rem; color: #475569; margin-bottom: 1.5rem; }
+    .form-label   { display: block; font-size: .8125rem; font-weight: 600; color: #1e293b; margin-bottom: .375rem; }
+    .form-input   { width: 100%; padding: .625rem .875rem; border: 1.5px solid #e2e8f0; border-radius: .5rem; font-size: .9375rem; font-family: inherit; outline: none; transition: border-color .15s; }
+    .form-input:focus { border-color: #4f46e5; }
+    .form-group   { margin-bottom: 1rem; }
+    .btn-login    { width: 100%; padding: .75rem; background: #4f46e5; color: #fff; border: none; border-radius: .625rem; font-weight: 700; font-size: .9375rem; cursor: pointer; transition: background .15s; }
+    .btn-login:hover { background: #4338ca; }
+    .btn-login:disabled { opacity: .6; cursor: not-allowed; }
+    .error-msg { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: .5rem; padding: .625rem .875rem; font-size: .8125rem; margin-bottom: 1rem; display: none; }
+    .modal-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; font-size: 1.25rem; color: #94a3b8; cursor: pointer; line-height: 1; }
+    .modal-close:hover { color: #0f172a; }
+    .login-hint { margin-top: 1rem; text-align: center; font-size: .75rem; color: #94a3b8; background: #f8fafc; border-radius: .5rem; padding: .625rem; }
+    .login-hint strong { color: #475569; }
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; margin-right: .375rem; vertical-align: middle; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+
+    /* Admin button in nav */
+    .btn-admin-nav { padding: .4rem 1.125rem; border-radius: 9999px; background: #4f46e5; color: #fff; font-size: .8125rem; font-weight: 600; border: none; cursor: pointer; transition: background .15s; }
+    .btn-admin-nav:hover { background: #4338ca; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+
+<!-- ── NAVBAR ─────────────────────────────── -->
+<header class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200">
+  <nav class="mx-auto w-full px-4 py-3">
+    <div class="flex items-center justify-between">
+
+      <!-- Logo (Left) -->
+      <a href="#" class="flex items-center gap-2">
+        <div style="height:4rem;width:auto;border-radius:.5rem;background:#e2e8f0;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+          <img src="assets/psg_college_of_arts_and_science_logo.jpg" alt="PSG CAS Logo" style="height:100%;width:100%;object-fit:cover;">
+        </div>
+        <div class="leading-tight">
+          <p class="font-semibold text-sm md:text-base">PSG College of Arts &amp; Science</p>
+        </div>
+      </a>
+
+      <!-- Desktop Nav (Centered) -->
+      <div class="hidden sm:flex items-center justify-center gap-6 text-sm md:text-base flex-1">
+        <a href="https://www.psgcas.ac.in/the-story-of-psgcas/" class="text-slate-700 hover:text-indigo-600">About</a>
+        <a href="https://www.psgcas.ac.in/programmes/" class="text-slate-700 hover:text-indigo-600">Academics</a>
+        <a href="https://www.psgcas.ac.in/events/" class="text-slate-700 hover:text-indigo-600">Events</a>
+        <a href="https://www.psgcas.ac.in/admissions/" class="text-slate-700 hover:text-indigo-600">Admissions</a>
+        <a href="https://www.psgcas.ac.in/exams/" class="text-slate-700 hover:text-indigo-600">Exams</a>
+        <a href="https://www.psgcas.ac.in/placements/" class="text-slate-700 hover:text-indigo-600">Placements</a>
+        <a href="https://www.psgcas.ac.in/iqac/" class="text-slate-700 hover:text-indigo-600">IQAC</a>
+      </div>
+
+      <!-- Admin Login button (Desktop) -->
+      <div class="hidden sm:flex items-center gap-2">
+        <button class="btn-admin-nav" id="open-login">Admin Login</button>
+      </div>
+
+      <!-- Mobile: hamburger -->
+      <div class="flex items-center gap-2 sm:hidden">
+        <button class="btn-admin-nav" id="open-login-mobile" style="font-size:.75rem;padding:.375rem .75rem;">Admin</button>
+        <button id="mobile-menu-toggle" type="button" style="display:inline-flex;align-items:center;justify-content:center;border-radius:.375rem;padding:.375rem;border:1px solid #cbd5e1;color:#334155;background:none;" aria-label="Open navigation menu">
+          <svg style="height:1.25rem;width:1.25rem;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile Menu -->
+    <div id="mobile-menu" class="sm:hidden mt-3 space-y-1 rounded-2xl border border-slate-200 bg-white shadow-sm px-3 py-3 hidden">
+      <a href="https://www.psgcas.ac.in/the-story-of-psgcas/" class="block rounded-lg px-2 py-1.5 text-14 font-medium text-slate-700 hover:bg-slate-50">Home</a>
+      <a href="https://www.psgcas.ac.in/programmes/" class="block rounded-lg px-2 py-1.5 text-14 font-medium text-slate-700 hover:bg-slate-50">Academics</a>
+      <a href="https://www.psgcas.ac.in/events/" class="block rounded-lg px-2 py-1.5 text-14 font-medium text-slate-700 hover:bg-slate-50">Events</a>
+      <a href="https://www.psgcas.ac.in/admissions/" class="block rounded-lg px-2 py-1.5 text-14 font-medium text-slate-700 hover:bg-slate-50">Admissions</a>
+      <a href="https://www.psgcas.ac.in/exams/" class="block rounded-lg px-2 py-1.5 text-14 font-medium text-slate-700 hover:bg-slate-50">Exams</a>
+      <a href="https://www.psgcas.ac.in/placements/" class="block rounded-lg px-2 py-1.5 text-14 font-medium text-slate-700 hover:bg-slate-50">Placements</a>
+      <a href="https://www.psgcas.ac.in/iqac/" class="block rounded-lg px-2 py-1.5 text-14 font-medium text-slate-700 hover:bg-slate-50">IQAC</a>
+    </div>
+  </nav>
+</header>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const btn  = document.getElementById('mobile-menu-toggle');
+    const menu = document.getElementById('mobile-menu');
+    btn.addEventListener('click', () => menu.classList.toggle('hidden'));
+  });
+</script>
+
+<!-- ── MAIN ─────────────────────────────── -->
+<main class="mx-auto w-full">
+
+  <!-- HERO -->
+  <section id="careers-hero" class="relative flex flex-col items-center py-10 sm:py-14 md:py-16 overflow-hidden">
+    <!-- GRID BACKGROUND -->
+    <div class="absolute inset-0 -z-20 grid-bg"></div>
+
+    <!-- PULSE LINES -->
+    <div class="absolute inset-x-0 top-0 h-px pulse-line-h opacity-40 animate-pulse-slow -z-10"></div>
+    <div class="absolute inset-y-0 left-1/2 w-px pulse-line-v opacity-30 animate-pulse-slower -z-10"></div>
+
+    <!-- SOFT GRADIENT BLOB -->
+    <div class="absolute top-20 left-1/2 -translate-x-1/2 w-480 h-320 grad-blob blur-3xl rounded-full opacity-60 -z-10"></div>
+
+    <!-- CONTENT -->
+    <h1 class="relative z-10 text-center h1-size font-semibold tracking-tight text-slate-900">
+      <span>Build Your Career with</span><br>
+      <span class="text-indigo-600">PSG College of Arts &amp; Science</span>
+    </h1>
+
+    <p class="relative z-10 mt-3 max-w-xl text-center text-sm sm:text-base text-slate-600">
+      Join a vibrant academic community committed to excellence in teaching,
+      research, administration, and innovation.
+    </p>
+
+    <!-- CTA -->
+    <div class="relative z-10 mt-5 flex gap-3 justify-center">
+      <a href="#job-openings" class="inline-flex items-center justify-center rounded-full bg-indigo-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 transition">
+        View Open Positions
+      </a>
+    </div>
+  </section>
+
+  <!-- JOB OPENINGS -->
+  <section id="job-openings" class="max-w-7xl mx-auto px-4 py-16">
+
+    <!-- HEADER -->
+    <div class="mb-12 text-center">
+      <h2 class="text-2xl sm:text-3xl font-bold text-slate-900">Current Job Openings</h2>
+      <p class="mt-3 max-w-3xl mx-auto text-slate-600 text-sm sm:text-base">
+        Applications are invited under <strong>Self-Financed Programmes</strong>
+        for Teaching and Non-Teaching positions.
+      </p>
+    </div>
+
+    <!-- JOB GRID -->
+    <div class="grid gap-8 md:grid-cols-2">
+
+      <!-- FACULTY : MBA -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-8 hover:shadow-xl transition">
+        <span class="text-xs font-semibold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full">Teaching</span>
+        <h3 class="mt-4 text-xl font-bold text-slate-900">Professor / Assistant Professor – MBA</h3>
+        <p class="mt-3 text-sm text-slate-600">
+          <strong>Specializations:</strong> Finance, Marketing, HR, Operations, Systems
+        </p>
+        <p class="mt-2 text-sm text-slate-600">
+          <strong>Qualification:</strong> PG with SET / NET / PhD<br>
+          <strong>Experience:</strong> 3+ years preferred
+        </p>
+        <a href="apply.html" class="inline-flex-mt5 text-blue-600 hover:text-blue-700">Apply Online →</a>
+      </div>
+
+      <!-- FACULTY : MULTI DISCIPLINE -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-8 hover:shadow-xl transition">
+        <span class="text-xs font-semibold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full">Teaching</span>
+        <h3 class="mt-4 text-xl font-bold text-slate-900">Associate / Assistant Professor</h3>
+        <p class="mt-3 text-sm text-slate-600 leading-relaxed">
+          English, Tamil, Hindi, French, Commerce, Management Sciences, Computer Science,
+          Mathematics, Psychology, Statistics, Visual Communication, Journalism,
+          Costume Design, Catering Science, Hospitality, Economics, Microbiology,
+          Nutrition, Physics, Chemistry, Biotechnology, Botany, Zoology,
+          Hospital Administration &amp; more.
+        </p>
+        <p class="mt-2 text-sm text-slate-600">
+          <strong>Qualification:</strong> PG with SET / NET / PhD
+        </p>
+        <a href="apply.html" class="inline-flex-mt5 text-blue-600 hover:text-blue-700">Apply Online →</a>
+      </div>
+
+      <!-- NON-TEACHING : ADMIN -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-8 hover:shadow-xl transition">
+        <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full">Non-Teaching</span>
+        <h3 class="mt-4 text-lg font-bold text-slate-900">Assistant / Junior Assistant</h3>
+        <p class="mt-2 text-sm text-slate-600">Qualification: Any Degree</p>
+        <p class="mt-2 text-sm text-slate-600">
+          Apply within 15 days from the date of advertisement to:
+          The Secretary, PSG College of Arts &amp; Science, Civil Aerodrome Post, Coimbatore – 641 014. Ph: 0422 – 430 3300
+        </p>
+      </div>
+
+      <!-- NON-TEACHING : TECH / SUPPORT -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-8 hover:shadow-xl transition">
+        <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full">Non-Teaching</span>
+        <h3 class="mt-4 text-lg font-bold text-slate-900">Technical &amp; Support Staff</h3>
+        <p class="mt-2 text-sm text-slate-600">
+          Multimedia Technician, Hardware &amp; Network Support Engineer,
+          Lab Assistants, Maintenance Staff, Hostel Wardens,
+          Counsellor, Nurse, Canteen &amp; Mess Staff.
+        </p>
+        <p class="mt-2 text-sm text-slate-600">
+          Apply within 15 days from the date of advertisement to:
+          The Secretary, PSG College of Arts &amp; Science, Civil Aerodrome Post, Coimbatore – 641 014. Ph: 0422 – 430 3300
+        </p>
+      </div>
+
+    </div>
+
+    <!-- FOOTER NOTE -->
+    <div class="mt-12 max-w-3xl mx-auto text-center text-sm text-slate-600">
+      <p class="font-medium text-slate-800">Salary: Commensurate with qualification and experience.</p>
+      <p class="mt-2">
+        Faculty applications are accepted <strong>only online</strong>.<br>
+        Last date: <strong>07 January 2026</strong>
+      </p>
+    </div>
+  </section>
+
+  <!-- DESKTOP CTA STRIP -->
+  <section class="hidden sm:block bg-blue-600">
+    <div class="max-w-7xl mx-auto px-4 py-12 flex items-center justify-between">
+      <h2 class="text-2xl font-semibold text-white">Be a Part of Our PSGCAS Family</h2>
+      <a href="apply.html" class="px-6 py-3 rounded-lg bg-white text-blue-700 font-semibold hover:bg-blue-50 transition">Apply Now</a>
+    </div>
+  </section>
+
+  <!-- FLOATING MOBILE CTA -->
+  <a href="apply.html" class="fixed sm:hidden bottom-4 left-4 right-4 z-50 flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 text-white font-semibold shadow-lg hover:bg-blue-700 transition">
+    Go to Career Portal
+  </a>
+
+</main>
+
+<!-- ── ADMIN LOGIN MODAL ── -->
+<div class="modal-overlay" id="login-modal">
+  <div class="modal-box">
+    <button class="modal-close" id="close-modal">&times;</button>
+    <div class="modal-logo">
+      <img src="assets/psgcas logo-2.png" alt="PSG CAS">
+      <div>
+        <div class="modal-logo-brand">PSG College of Arts &amp; Science</div>
+        <div class="modal-logo-sub">Careers Admin Portal</div>
+      </div>
+    </div>
+    <h2 class="modal-title">Admin Sign In</h2>
+    <p class="modal-sub">Enter your credentials to access the admin portal.</p>
+    <div id="login-error" class="error-msg"></div>
+    <form id="login-form" autocomplete="on">
+      <div class="form-group">
+        <label class="form-label" for="admin-email">Email Address</label>
+        <input class="form-input" type="email" id="admin-email" name="email" autocomplete="email" placeholder="admin@psgcas.ac.in" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="admin-password">Password</label>
+        <input class="form-input" type="password" id="admin-password" name="password" autocomplete="current-password" placeholder="••••••••" required>
+      </div>
+      <button class="btn-login" type="submit" id="btn-login-submit">Sign In</button>
+    </form>
+    <div class="login-hint">
+      <strong>Viewer:</strong> viewer@psgcas.ac.in / view123&nbsp;&nbsp;
+      <strong>Editor:</strong> editor@psgcas.ac.in / edit123
+    </div>
+  </div>
+</div>
+
+<script>
+  // Open modal
+  ['open-login','open-login-mobile'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', () => {
+      document.getElementById('login-modal').classList.add('active');
+      document.getElementById('admin-email').focus();
+    });
+  });
+
+  // Close modal
+  document.getElementById('close-modal').addEventListener('click', () => {
+    document.getElementById('login-modal').classList.remove('active');
+  });
+  document.getElementById('login-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) e.currentTarget.classList.remove('active');
+  });
+
+  // Login form → real API
+  document.getElementById('login-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const email    = document.getElementById('admin-email').value.trim();
+    const password = document.getElementById('admin-password').value.trim();
+    const errDiv   = document.getElementById('login-error');
+    const btn      = document.getElementById('btn-login-submit');
+
+    errDiv.style.display = 'none';
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Signing in…';
+
+    try {
+      const res  = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        errDiv.textContent   = data.error || 'Login failed. Please try again.';
+        errDiv.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+        return;
+      }
+
+      sessionStorage.setItem('psg_token', data.token);
+      sessionStorage.setItem('psg_role',  data.role);
+      sessionStorage.setItem('psg_email', data.email);
+      sessionStorage.setItem('psg_name',  data.name);
+
+      btn.innerHTML = '&#10003; Redirecting…';
+      window.location.href = 'admin.html';
+
+    } catch (err) {
+      errDiv.textContent   = 'Cannot connect to server. Is the server running?';
+      errDiv.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+  });
+</script>
+</body>
+</html>
