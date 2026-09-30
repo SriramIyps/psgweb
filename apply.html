@@ -25,10 +25,10 @@
 
     /* Card */
     .card { background: #fff; border-radius: 1rem; box-shadow: 0 4px 24px rgba(0,0,0,.08); overflow: hidden; }
-    .card-header { padding: 1.5rem; background: #7b1c1c !important; }
+    .card-header { padding: 1.5rem; background: #002e5b !important; }
     .card-title   { color: #fff; font-weight: 600; }
     .card-body    { padding: 1.5rem; }
-    .card-title-menu { font-size: 1.05rem; font-weight: 700; color: #1e293b; border-left: 4px solid #7b1c1c; padding-left: .75rem; margin: .75rem 0; }
+    .card-title-menu { font-size: 1.05rem; font-weight: 700; color: #1e293b; border-left: 4px solid #002e5b; padding-left: .75rem; margin: .75rem 0; }
     .card-subtitle-menu { font-size: .95rem; font-weight: 600; color: #334155; margin: .75rem 0 .375rem; text-decoration: underline; text-underline-offset: 3px; }
     .logo-desktop { max-height: 80px; }
 
@@ -50,11 +50,11 @@
       font-size: .875rem; font-family: inherit; background: #fff; color: #0f172a; outline: none;
       transition: border-color .15s;
     }
-    .form-control:focus, .form-select:focus { border-color: #7b1c1c; box-shadow: 0 0 0 3px rgba(123,28,28,.12); }
+    .form-control:focus, .form-select:focus { border-color: #002e5b; box-shadow: 0 0 0 3px rgba(0,46,91,.12); }
     .form-select-sm { font-size: .8125rem; padding: .375rem .625rem; }
     .form-control-sm { font-size: .8125rem; padding: .375rem .625rem; }
     textarea.form-control { resize: vertical; min-height: 80px; }
-    .form-check-input { width: 1rem; height: 1rem; margin-right: .3rem; accent-color: #7b1c1c; cursor: pointer; }
+    .form-check-input { width: 1rem; height: 1rem; margin-right: .3rem; accent-color: #002e5b; cursor: pointer; }
     .form-check-label { font-size: .875rem; color: #334155; cursor: pointer; }
     .form-check { display: flex; align-items: center; gap: .3rem; margin-bottom: .4rem; }
     .row-check { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; padding: .3rem 0; }
@@ -66,8 +66,8 @@
 
     /* Buttons */
     .btn { display: inline-flex; align-items: center; justify-content: center; padding: .5rem 1.25rem; border-radius: .5rem; font-size: .875rem; font-weight: 500; cursor: pointer; border: none; transition: background .15s; }
-    .btn-primary { background: #7b1c1c; color: #fff; }
-    .btn-primary:hover { background: #5c1414; }
+    .btn-primary { background: #002e5b; color: #fff; }
+    .btn-primary:hover { background: #001e3c; }
     .btn-danger  { background: #ef4444; color: #fff; }
     .btn-danger:hover { background: #dc2626; }
     .btn:disabled { opacity: .6; cursor: not-allowed; }
@@ -75,7 +75,7 @@
     /* Dynamic row containers */
     .dyn-row { border: 1px solid #e2e8f0; border-radius: .5rem; padding: .75rem; margin-bottom: .5rem; }
     .add-more { cursor: pointer; margin: .375rem 0; }
-    .add-more .d-flex { color: #7b1c1c; font-size: .875rem; font-weight: 500; gap: .375rem; align-items: center; }
+    .add-more .d-flex { color: #002e5b; font-size: .875rem; font-weight: 500; gap: .375rem; align-items: center; }
     .add-more:hover { opacity: .8; }
 
     /* Topbar */
@@ -99,7 +99,7 @@
     .success-box h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: .5rem; }
     .success-box p  { font-size: .875rem; color: #475569; margin-bottom: 1.25rem; }
     .success-box .app-ref { font-size: .75rem; color: #94a3b8; margin-bottom: 1.25rem; }
-    .btn-ok { padding: .625rem 2rem; background: #7b1c1c; color: #fff; border-radius: .5rem; border: none; font-size: .875rem; font-weight: 600; cursor: pointer; }
+    .btn-ok { padding: .625rem 2rem; background: #002e5b; color: #fff; border-radius: .5rem; border: none; font-size: .875rem; font-weight: 600; cursor: pointer; }
 
     /* Error banner */
     .form-error-banner { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: .5rem; padding: .75rem 1rem; font-size: .875rem; margin-bottom: 1rem; display: none; }
@@ -153,6 +153,8 @@
               <label class="control-label">Applying for the Position <span class="required">*</span></label>
               <select name="position" class="form-select form-select-sm" required id="id_position">
                 <option value="">---------</option>
+                <option>Professor / Assistant Professor – MBA</option>
+                <option>Associate / Assistant Professor</option>
                 <option>Research Assistant</option>
                 <option>Teaching Assistant</option>
               </select>
