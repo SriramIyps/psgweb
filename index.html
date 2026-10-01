@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -478,7 +478,11 @@
       sessionStorage.setItem('psg_name',  data.name);
 
       btn.innerHTML = '&#10003; Redirecting…';
-      window.location.href = 'admin.html';
+      if (data.role === 'secretary' || data.role === 'viewer') {
+        window.location.href = 'secretary.html';
+      } else {
+        window.location.href = 'vp.html';
+      }
 
     } catch (err) {
       errDiv.textContent   = 'Cannot connect to server. Is the server running?';

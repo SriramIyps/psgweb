@@ -541,6 +541,13 @@ def export_csv():
     )
 
 
+# Auto-init DB on startup so tables and admin seeds are ready under Gunicorn/Render
+try:
+    init_db()
+except Exception as _e:
+    print("[WARN] init_db startup note:", _e)
+
+
 # ─────────────────────────────────────────────
 # STATIC FILES (serve the front-end HTML pages)
 # ─────────────────────────────────────────────
@@ -551,8 +558,25 @@ def serve_upload(filename):
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_static(path):
-    if path and os.path.exists(os.path.join(BASE_DIR, path)):
-        return send_from_directory(BASE_DIR, path)
+    if path:
+        # Security: block path traversal & access to sensitive server files
+        clean_path = os.path.normpath(path).replace("\\", "/")
+        lowered = clean_path.lower()
+        if (
+            lowered.startswith("database")
+            or lowered.startswith(".")
+            or lowered == "app.py"
+            or lowered.endswith(".py")
+            or lowered.endswith(".db")
+            or lowered.endswith(".bat")
+            or lowered == "procfile"
+            or lowered == "requirements.txt"
+        ):
+            return jsonify(error="Access denied"), 403
+
+        file_path = os.path.join(BASE_DIR, clean_path)
+        if os.path.isfile(file_path):
+            return send_from_directory(BASE_DIR, clean_path)
     return send_from_directory(BASE_DIR, "index.html")
 
 
@@ -560,10 +584,6 @@ def serve_static(path):
 # MAIN
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
-    init_db()
-    print("PSG CAS Careers Portal starting...")
-    print("  Frontend : http://localhost:5000")
-    print("  Admin    : http://localhost:5000/admin.html")
-    print("  API      : http://localhost:5000/api/stats (needs login first)")
-    print()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    print(f"PSG CAS Careers Portal running on http://localhost:{port}")
+    app.run(host="0.0.0.0", port=port, debug=True)

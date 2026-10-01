@@ -269,10 +269,11 @@
   if (!token || !role || (role !== 'editor' && role !== 'vice_principal')) { window.location.href = 'index.html'; }
 
   // Apply role badge
+  const isEditor = role === 'editor' || role === 'vice_principal';
   const rb = document.getElementById('role-badge');
   document.getElementById('user-email').textContent = email;
-  if (role === 'editor') { rb.textContent = 'Editor (View + Edit)'; rb.className = 'role-badge role-editor'; }
-  else                   { rb.textContent = 'Viewer (Read-Only)';   rb.className = 'role-badge role-viewer'; }
+  if (isEditor) { rb.textContent = 'Vice Principal (Full Access)'; rb.className = 'role-badge role-editor'; }
+  else          { rb.textContent = 'Viewer (Read-Only)';           rb.className = 'role-badge role-viewer'; }
 
   // Logout
   document.getElementById('btn-logout').addEventListener('click', () => {
@@ -342,7 +343,7 @@
           <td><span class="status-badge ${sc}">${esc(a.status || 'Pending')}</span></td>
           <td><div class="act-btns">
             <button class="btn-view" onclick="openModal(${a.id}, false)">View</button>
-            ${role === 'editor' ? `<button class="btn-edit" onclick="openModal(${a.id}, true)">Edit</button>
+            ${isEditor ? `<button class="btn-edit" onclick="openModal(${a.id}, true)">Edit</button>
             <button class="btn-del" onclick="deleteApp(${a.id})">Del</button>` : ''}
           </div></td>
         </tr>`;
@@ -426,7 +427,7 @@
 
   // ── DELETE ───────────────────────────────────
   async function deleteApp(id) {
-    if (role !== 'editor') { toast('No permission', 'error'); return; }
+    if (!isEditor) { toast('No permission', 'error'); return; }
     if (!confirm('Permanently delete this application? This cannot be undone.')) return;
     const res = await api(`/api/applications/${id}`, { method: 'DELETE' });
     if (res.ok) { toast('Application deleted', 'error'); reloadCurrentPage(); }
@@ -486,7 +487,7 @@
 
   async function openModal(id, isEdit) {
     currentId = id;
-    editMode  = isEdit && role === 'editor';
+    editMode  = isEdit && isEditor;
     const res  = await api(`/api/applications/${id}`);
     if (!res.ok) { toast('Failed to load application', 'error'); return; }
     const app  = await res.json();
@@ -558,7 +559,7 @@
 
   // Save modal
   document.getElementById('modal-save').addEventListener('click', async () => {
-    if (!editMode || role !== 'editor') return;
+    if (!editMode || !isEditor) return;
     const updates = {};
     document.querySelectorAll('#modal-body [data-key]').forEach(el => {
       updates[el.dataset.key] = el.value;

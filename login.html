@@ -117,11 +117,10 @@
 <script>
   // If already logged in, redirect
   var exToken = sessionStorage.getItem('psg_token');
-  var exEmail  = sessionStorage.getItem('psg_email');
-  var exFole   = sessionStorage.getItem('psg_role');
+  var exRole  = sessionStorage.getItem('psg_role');
   if (exToken && exRole) {
-    if (exRole === 'viewer' || exFole === 'secretary') window.location.href = 'secretary.html';
-    else window.location.href = 'vp.html';
+    if (exRole === 'viewer' || exRole === 'secretary') window.location.href = 'secretary.html';
+    else if (exRole === 'editor' || exRole === 'vice_principal') window.location.href = 'vp.html';
   }
 
   var loginBtn = document.getElementById('loginBtn');
