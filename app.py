@@ -331,9 +331,24 @@ def submit_application():
     """Public endpoint — applicants POST here (multipart/form-data)."""
     f = request.form
 
+    # ── Server-side Validation of Mandatory Fields ──
+    name       = (f.get("name") or "").strip()
+    email      = (f.get("email") or "").strip()
+    mobile_no  = (f.get("mobile_no") or "").strip()
+    position   = (f.get("position") or "").strip()
+    department = (f.get("department") or "").strip()
+
+    if not name or not email or not mobile_no or not position or not department:
+        return jsonify(error="Mandatory fields missing: Position, Department, Full Name, Email, and Mobile No. must be filled."), 400
+
+    # Resume upload validation
+    resume_file = request.files.get("resume")
+    if not resume_file or not resume_file.filename:
+        return jsonify(error="Resume upload is required. Please upload your CV/Resume."), 400
+
     # File uploads
     photo_path  = save_file(request.files.get("photo"),  "photos",  ALLOWED_PHOTO)
-    resume_path = save_file(request.files.get("resume"), "resumes", ALLOWED_DOC)
+    resume_path = save_file(resume_file, "resumes", ALLOWED_DOC)
     papers_path = save_file(request.files.get("papers"), "papers",  ALLOWED_SHEET)
 
     # JSON sub-tables from client
@@ -345,7 +360,10 @@ def submit_application():
     patents             = f.get("patents_json",   "[]")
     pdf_details         = f.get("pdf_json",       "[]")
 
-    app_uuid = uuid.uuid4().hex
+    # Generate institutional Reference ID (e.g. PSG-2026-A48F9B)
+    year = datetime.now().year
+    ref_suffix = uuid.uuid4().hex[:6].upper()
+    app_uuid = f"PSG-{year}-{ref_suffix}"
     now      = datetime.now().isoformat()
 
     db = get_db()
@@ -521,7 +539,16 @@ def submit_application():
         print("DB error:", e)
         return jsonify(error="Failed to save application. " + str(e)), 500
 
-    return jsonify(success=True, app_uuid=app_uuid, message="Application submitted successfully!"), 201
+    return jsonify(
+        success=True,
+        app_uuid=app_uuid,
+        name=name,
+        position=position,
+        department=department,
+        email=email,
+        date=datetime.now().strftime("%d %b %Y, %I:%M %p"),
+        message="Application submitted successfully!"
+    ), 201
 
 
 @app.route("/api/applications", methods=["GET"])

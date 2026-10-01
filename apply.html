@@ -90,15 +90,35 @@
     @keyframes spin { to{transform:rotate(360deg)} }
 
     /* Success overlay */
-    .success-overlay { display: none; position: fixed; inset: 0; z-index: 200; background: rgba(15,23,42,.55); backdrop-filter: blur(4px); align-items: center; justify-content: center; }
+    .success-overlay { display: none; position: fixed; inset: 0; z-index: 300; background: rgba(15,23,42,.65); backdrop-filter: blur(6px); align-items: center; justify-content: center; padding: 1rem; }
     .success-overlay.active { display: flex; }
-    .success-box { background: #fff; border-radius: 1.5rem; padding: 2.5rem 2rem; width: 100%; max-width: 440px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,.25); animation: fadeIn .2s ease; }
+    .success-box { background: #fff; border-radius: 1.5rem; padding: 2.25rem 2rem; width: 100%; max-width: 500px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,.35); animation: fadeIn .2s ease; max-height: 90vh; overflow-y: auto; }
     @keyframes fadeIn { from{opacity:0;transform:scale(.95)} to{opacity:1;transform:scale(1)} }
-    .success-icon { width: 64px; height: 64px; border-radius: 9999px; background: #d1fae5; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; font-size: 2rem; color: #047857; }
-    .success-box h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: .5rem; }
-    .success-box p  { font-size: .875rem; color: #475569; margin-bottom: 1.25rem; }
-    .success-box .app-ref { font-size: .75rem; color: #94a3b8; margin-bottom: 1.25rem; }
-    .btn-ok { padding: .625rem 2rem; background: #002e5b; color: #fff; border-radius: .5rem; border: none; font-size: .875rem; font-weight: 600; cursor: pointer; }
+    .success-icon { width: 60px; height: 60px; border-radius: 9999px; background: #dcfce7; display: flex; align-items: center; justify-content: center; margin: 0 auto .75rem; font-size: 2rem; color: #16a34a; }
+    .success-box h2 { font-size: 1.35rem; font-weight: 800; color: #0f172a; margin-bottom: .35rem; }
+    .success-box p  { font-size: .875rem; color: #475569; margin-bottom: 1rem; }
+    .ref-card { background: #f0fdf4; border: 2px dashed #86efac; border-radius: 1rem; padding: 1rem 1.25rem; margin: 1rem 0; text-align: center; }
+    .ref-label { font-size: .725rem; font-weight: 700; color: #166534; letter-spacing: .08em; text-transform: uppercase; margin-bottom: .35rem; }
+    .ref-code { font-size: 1.75rem; font-weight: 800; color: #14532d; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: .06em; }
+    .btn-copy { margin-top: .6rem; background: #dcfce7; color: #166534; border: 1px solid #86efac; border-radius: 9999px; padding: .35rem 1rem; font-size: .8rem; font-weight: 600; cursor: pointer; transition: all .15s; }
+    .btn-copy:hover { background: #bbf7d0; }
+    .ack-details { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: .75rem; padding: .75rem 1rem; text-align: left; font-size: .8125rem; margin-bottom: 1rem; }
+    .ack-row { display: flex; justify-content: space-between; padding: .3rem 0; border-bottom: 1px solid #f1f5f9; gap: .5rem; }
+    .ack-row:last-child { border-bottom: none; }
+    .ack-row span { color: #64748b; }
+    .ack-row strong { color: #1e293b; text-align: right; }
+    .ack-notice { font-size: .775rem; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: .5rem; padding: .65rem .85rem; text-align: left; }
+    .btn-print { padding: .625rem 1.25rem; background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: .5rem; font-size: .875rem; font-weight: 600; cursor: pointer; transition: background .15s; }
+    .btn-print:hover { background: #e2e8f0; }
+    .btn-ok { padding: .625rem 1.5rem; background: #002e5b; color: #fff; border-radius: .5rem; border: none; font-size: .875rem; font-weight: 600; cursor: pointer; }
+    .btn-ok:hover { background: #001f3f; }
+    @media print {
+      body * { visibility: hidden; }
+      #success-overlay, #success-overlay * { visibility: visible; }
+      #success-overlay { position: absolute; left: 0; top: 0; width: 100%; background: #fff; display: block !important; padding: 0; }
+      .success-box { box-shadow: none; border: 1px solid #cbd5e1; max-width: 100%; border-radius: 0; padding: 2rem; }
+      .btn-print, .btn-ok, .btn-copy { display: none !important; }
+    }
 
     /* Error banner */
     .form-error-banner { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: .5rem; padding: .75rem 1rem; font-size: .875rem; margin-bottom: 1rem; display: none; }
@@ -118,7 +138,7 @@
 </div>
 
 <div class="container" style="margin-top:2rem;margin-bottom:3rem;">
-  <form id="apply-form" method="post" enctype="multipart/form-data" novalidate>
+  <form id="apply-form" method="post" enctype="multipart/form-data">
     <div class="card">
 
       <!-- Header -->
@@ -364,14 +384,38 @@
   </form>
 </div>
 
-<!-- SUCCESS OVERLAY -->
+<!-- SUCCESS OVERLAY WITH OFFICIAL REFERENCE ID -->
 <div class="success-overlay" id="success-overlay">
   <div class="success-box">
     <div class="success-icon">&#10003;</div>
     <h2>Application Submitted!</h2>
-    <p>Thank you for applying to PSG College of Arts &amp; Science. Your application has been recorded. We will contact you if shortlisted.</p>
-    <p class="app-ref" id="success-ref"></p>
-    <button class="btn-ok" id="success-ok">Back to Careers</button>
+    <p>Thank you for applying to <strong>PSG College of Arts &amp; Science</strong>. Your application has been successfully recorded.</p>
+
+    <!-- Prominent Reference ID Card -->
+    <div class="ref-card">
+      <div class="ref-label">Your Application Reference Number</div>
+      <div class="ref-code" id="success-ref-code">PSG-2026-XXXXXX</div>
+      <button type="button" class="btn-copy" id="btn-copy-ref" onclick="copyRefId()">
+        <span id="copy-text">📋 Copy Reference ID</span>
+      </button>
+    </div>
+
+    <!-- Summary Details -->
+    <div class="ack-details">
+      <div class="ack-row"><span>Applicant Name:</span><strong id="ack-name">—</strong></div>
+      <div class="ack-row"><span>Position Applied:</span><strong id="ack-position">—</strong></div>
+      <div class="ack-row"><span>Department:</span><strong id="ack-dept">—</strong></div>
+      <div class="ack-row"><span>Date &amp; Time:</span><strong id="ack-date">—</strong></div>
+    </div>
+
+    <div class="ack-notice">
+      ⚠️ <strong>Important:</strong> Please write down or screenshot this Reference Number. You will need it for interview tracking and all future correspondence with PSGCAS.
+    </div>
+
+    <div style="display:flex;gap:.75rem;justify-content:center;margin-top:1.25rem;">
+      <button type="button" class="btn-print" onclick="window.print()">🖨️ Print Slip</button>
+      <button type="button" class="btn-ok" id="success-ok">Back to Careers</button>
+    </div>
   </div>
 </div>
 
@@ -571,8 +615,55 @@
     const errBanner = document.getElementById('form-error-banner');
     errBanner.style.display = 'none';
 
+    // 1. Browser HTML5 validity check
+    if (!this.checkValidity()) {
+      this.reportValidity();
+      return;
+    }
+
+    // 2. Validate mandatory position and department
+    const pos = document.getElementById('id_position').value.trim();
+    const dept = document.getElementById('id_department').value.trim();
+    if (!pos || !dept) {
+      errBanner.textContent = 'Please select both the Position and Department you are applying for.';
+      errBanner.style.display = 'block';
+      errBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    // 3. Validate at least one education entry
+    const eduRows = document.querySelectorAll('.edu-item');
+    let hasEdu = false;
+    eduRows.forEach(r => {
+      const q = r.querySelector('.edu-qual')?.value.trim();
+      const deg = r.querySelector('.edu-degree')?.value.trim();
+      if (q && deg) hasEdu = true;
+    });
+    if (!hasEdu) {
+      errBanner.textContent = 'Please enter at least one Education qualification (e.g. 10th, 12th, UG, PG).';
+      errBanner.style.display = 'block';
+      errBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    // 4. Validate resume is attached
+    const resumeInput = document.querySelector('input[name="resume"]');
+    if (!resumeInput || !resumeInput.files || resumeInput.files.length === 0) {
+      errBanner.textContent = 'Resume upload is required. Please attach your CV/Resume file.';
+      errBanner.style.display = 'block';
+      resumeInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    // 5. Declaration check
+    if (!document.getElementById('id_tac').checked) {
+      errBanner.textContent = 'Please check the declaration box before submitting.';
+      errBanner.style.display = 'block';
+      return;
+    }
+
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Submitting…';
+    btn.innerHTML = '<span class="spinner"></span> Submitting Application…';
 
     // Build FormData (handles files natively)
     const fd = new FormData(this);
@@ -591,23 +682,44 @@
       const data = await res.json();
 
       if (!res.ok) {
-        errBanner.textContent  = data.error || 'Submission failed. Please try again.';
+        errBanner.textContent  = data.error || 'Submission failed. Please check the form and try again.';
         errBanner.style.display = 'block';
+        errBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
         btn.disabled = false;
         btn.textContent = 'Submit Application';
         return;
       }
 
-      document.getElementById('success-ref').textContent = 'Reference ID: ' + data.app_uuid;
+      // Populate Acknowledgement Card
+      const refId = data.app_uuid || 'PSG-2026-REC';
+      document.getElementById('success-ref-code').textContent = refId;
+      document.getElementById('ack-name').textContent = data.name || document.querySelector('input[name="name"]')?.value || 'Applicant';
+      document.getElementById('ack-position').textContent = data.position || pos;
+      document.getElementById('ack-dept').textContent = data.department || dept;
+      document.getElementById('ack-date').textContent = data.date || new Date().toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+
       document.getElementById('success-overlay').classList.add('active');
 
     } catch (err) {
-      errBanner.textContent  = 'Could not connect to the server. Please ensure the server is running.';
+      errBanner.textContent  = 'Could not connect to the server. Please check your connection and try again.';
       errBanner.style.display = 'block';
+      errBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
       btn.disabled = false;
       btn.textContent = 'Submit Application';
     }
   });
+
+  // Copy Reference ID
+  function copyRefId() {
+    const code = document.getElementById('success-ref-code').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+      const btn = document.getElementById('copy-text');
+      btn.textContent = '✓ Copied to Clipboard!';
+      setTimeout(() => { btn.textContent = '📋 Copy Reference ID'; }, 2500);
+    }).catch(() => {
+      prompt('Your Reference ID:', code);
+    });
+  }
 
   document.getElementById('success-ok').addEventListener('click', () => {
     window.location.href = 'index.html';
