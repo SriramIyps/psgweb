@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -71,6 +71,10 @@
     .badge-pos { font-size: .7rem; font-weight: 600; padding: .15rem .5rem; border-radius: 9999px; }
     .bp-ra { background: #ede9fe; color: #6d28d9; }
     .bp-ta { background: #fef3c7; color: #92400e; }
+    .bp-prof { background: #dbeafe; color: #1e40af; }
+    .bp-asst-mba { background: #e0e7ff; color: #3730a3; }
+    .bp-assoc { background: #fae8ff; color: #86198f; }
+    .bp-asst { background: #ccfbf1; color: #0f766e; }
     .status-badge { font-size: .7rem; font-weight: 600; padding: .15rem .5rem; border-radius: 9999px; }
     .s-pending  { background: #fef9c3; color: #854d0e; }
     .s-shortlisted { background: #d1fae5; color: #065f46; }
@@ -198,7 +202,15 @@
           <div class="ctrl-bar">
             <input type="text" id="search-all" placeholder="Search name, email, dept…" oninput="loadAll()">
             <select id="filter-dept" onchange="loadAll()"><option value="">All Departments</option></select>
-            <select id="filter-pos" onchange="loadAll()"><option value="">All Positions</option><option value="Research Assistant">Research Assistant</option><option value="Teaching Assistant">Teaching Assistant</option></select>
+            <select id="filter-pos" onchange="loadAll()">
+              <option value="">All Positions</option>
+              <option value="Professor MBA">Professor MBA</option>
+              <option value="Assistant Prof MBA">Assistant Prof MBA</option>
+              <option value="Associate Professor">Associate Professor</option>
+              <option value="Assistant Professor">Assistant Professor</option>
+              <option value="Research Assistant">Research Assistant</option>
+              <option value="Teaching Assistant">Teaching Assistant</option>
+            </select>
             <select id="filter-status" onchange="loadAll()"><option value="">All Status</option><option>Pending</option><option>Shortlisted</option><option>Selected</option><option>Rejected</option></select>
             <button class="btn-refresh" onclick="loadAll()">&#8635;</button>
             <button class="btn-export" onclick="exportCSV()">&#8595; CSV</button>
@@ -310,7 +322,13 @@
     const h = `<table>
       <thead><tr><th>#</th><th>Name</th><th>Position</th><th>Department</th><th>Email</th><th>Mobile</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>${apps.map((a, i) => {
-        const posClass = (a.position || '').includes('Research') ? 'bp-ra' : 'bp-ta';
+        const pos = a.position || '';
+        let posClass = 'bp-ta';
+        if (pos.includes('Research')) posClass = 'bp-ra';
+        else if (pos.includes('Professor MBA')) posClass = 'bp-prof';
+        else if (pos.includes('Assistant Prof MBA')) posClass = 'bp-asst-mba';
+        else if (pos.includes('Associate Professor')) posClass = 'bp-assoc';
+        else if (pos.includes('Assistant Professor')) posClass = 'bp-asst';
         const date = a.submitted_at ? new Date(a.submitted_at).toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'}) : '—';
         const sc = {Pending:'s-pending', Shortlisted:'s-shortlisted', Selected:'s-selected', Rejected:'s-rejected'}[a.status] || 's-pending';
         return `<tr>
