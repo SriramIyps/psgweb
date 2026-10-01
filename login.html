@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PSG CAS - Staff Login</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --maroon: #7b1c1c; --maroon-dark: #5c1414; --gold: #c9a84c; }
+    body {
+      font-family: "Inter", system-ui, sans-serif;
+      background: #0f172a;
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      color: #f1f5f9; overflow: hidden; position: relative;
+    }
+    body::before {
+      content: ''; position: fixed;
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(123,28,28,0.22) 0%, transparent 70%);
+      top: -150px; left: -150px; border-radius: 50%;
+      animation: blob 9s ease-in-out infinite alternate; pointer-events: none;
+    }
+    @keyframes blob { from { transform: translate(0,0) scale(1); } to { transform: translate(30px,30px) scale(1.1); } }
+    .card {
+      position: relative; z-index: 1;
+      width: 420px;
+      background: #1e293b;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px; padding: 48px 40px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+      animation: fadeUp 0.4s ease both;
+    }
+    @keyframes fadeUp { from { opacity:0; transform: translateY(20px); } to { opacity:1; transform: translateY(0); } }
+    .logo { display:flex; align-items:center; gap:12px; margin-bottom:32px; }
+    .logo-img { height:48px; border-radius:8px; }
+    .logo-text strong { display:block; font-size:16px; font-weight:700; }
+    .logo-text span { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; }
+    h1 { font-size:24px; font-weight:700; letter-spacing:-.5px; margin-bottom:6px; }
+    .subtitle { color:#94a3b8; font-size:14px; margin-bottom:32px; }
+    .field { margin-bottom:18px; }
+    label { display:block; font-size:12px; font-weight:500; color:#94a3b8; margin-bottom:7px; text-transform:uppercase; letter-spacing:0.4px; }
+    input {
+      width:100%; padding:12px 14px;
+      background:#263348; border:1px solid rgba(255,255,255,0.08);
+      border-radius:12px; color:#f1f5f9;
+      font-size:14px; font-family:inherit;
+      outline:none; transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input:focus { border-color: #eb1c1c; box-shadow: 0 0 0 3px rgba(123,28,28,0.25); }
+    input::placeholder { color:#475569; }
+    .btn {
+      width:100%; padding:13px;
+      background: linear-gradient(135deg, #7b1c1c, #a83232);
+      color:#fff; border:none; border-radius:12px;
+      font-size:14px; font-weight:600; font-family:inherit;
+      cursor:pointer; margin-top:8px;
+      transition: opacity 0.2s, transform 0.15s;
+      box-shadow: 0 4px 20px rgba(123,28,28,0.35);
+    }
+    .btn:hover:not(:disabled) { opacity:0.92; transform:translateY(-1px); }
+    .btn:disabled { opacity:0.6; cursor:not-allowed; transform:none; }
+    .spinner {
+      display:none; width:17px; height:17px;
+      border:2px solid rgba(255,255,255,0.3); border-top-color:#fff;
+      border-radius:50%; animation:spin 0.7s linear infinite; margin:0 auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .err {
+      display:none; background:rgba(239,38,38,0.1);
+      border:1px solid rgba(239,68,68,0.3); color:#ef4444;
+      font-size:13px; padding:11px 14px; border-radius:10px;
+      margin-top:14px; text-align:center;
+    }
+    .hint {
+      margin-top:28px; padding-top:20px;
+      border-top:1px solid rgba(255,255,255,0.08);
+      font-size:11px; color:#475569; text-align:center;
+    }
+    .hint strong { color:#64748b; }
+    .hint a { color:#94a3b8; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <img class="logo-img" src="assets/psgcas logo-2.png" alt="PSG CAS" onerror="this.style.display='none'" />
+    <div class="logo-text">
+      <strong>PSG College of Arts &amp; Science</strong>
+      <span>Staff Portal Login</span>
+    </div>
+  </div>
+  <h1>Staff Sign In</h1>
+  <p class="subtitle">Authorised staff only. Sign in to access the applicant management portal.</p>
+  <form id="loginForm">
+    <div class="field">
+      <label for="email">Email Address</label>
+      <input type="email" id="email" placeholder="admin@psgcas.ac.in" autocomplete="email" required />
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" required />
+    </div>
+    <button class="btn" type="submit" id="loginBtn">
+      <span id="btnText">Sign In</span>
+      <div class="spinner" id="spinner"></div>
+    </button>
+    <div class="err" id="errMsg"></div>
+  </form>
+  <div class="hint">
+    <strong>Secretary:</strong> secretary@psgcas.ac.in / sec@psgcas2024<br>
+    <strong>Vice Principal:</strong> vp@psgcas.ac.in / vp@psgcas2024
+  </div>
+</div>
+
+<script>
+  // If already logged in, redirect
+  var exToken = sessionStorage.getItem('psg_token');
+  var exEmail  = sessionStorage.getItem('psg_email');
+  var exFole   = sessionStorage.getItem('psg_role');
+  if (exToken && exRole) {
+    if (exRole === 'viewer' || exFole === 'secretary') window.location.href = 'secretary.html';
+    else window.location.href = 'vp.html';
+  }
+
+  var loginBtn = document.getElementById('loginBtn');
+  var btnText  = document.getElementById('btnText');
+  var spinner  = document.getElementById('spinner');
+  var errMsg   = document.getElementById('errMsg');
+
+  function setLoading(on) {
+    loginBtn.disabled     = on;
+    btnText.style.display = on ? 'none'  : 'block';
+    spinner.style.display = on ? 'block' : 'none';
+  }
+
+  document.getElementById('loginForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    errMsg.style.display = 'none';
+    setLoading(true);
+
+    var email    = document.getElementById('email').value.trim();
+    var password = document.getElementById('password').value.trim();
+
+    try {
+      var res  = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, password: password })
+      });
+      var data = await res.json();
+
+      if (!res.ok) {
+        setLoading(false);
+        errMsg.textContent   = data.error || 'Login failed. Please try again.';
+        errMsg.style.display = 'block';
+        return;
+      }
+
+      sessionStorage.setItem('psg_token', data.token);
+      sessionStorage.setItem('psg_role',  data.role);
+      sessionStorage.setItem('psg_email', data.email);
+      sessionStorage.setItem('psg_name',  data.name || '');
+
+      btnText.style.display = 'block';
+      spinner.style.display = 'none';
+      loginBtn.textContent  = '\u2013 Redirecting\u2026';
+
+      // Route by role
+      if (data.role === 'viewer' || data.role === 'secretary') {
+        window.location.href = 'secretary.html';
+      } else if (data.role === 'editor' || data.role === 'vice_principal') {
+        window.location.href = 'vp.html';
+      } else {
+        sessionStorage.clear();
+        setLoading(false);
+        errMsg.textContent   = 'Unknown role. Contact administrator.';
+        errMsg.style.display = 'block';
+      }
+
+    } catch (err) {
+      setLoading(false);
+      errMsg.textContent   = 'Cannot connect to server. Is the server running?';
+      errMsg.style.display = 'block';
+    }
+  });
+</script>
+</body>
+</html>

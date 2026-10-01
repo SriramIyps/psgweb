@@ -67,7 +67,7 @@ def init_db():
             id       INTEGER PRIMARY KEY AUTOINCREMENT,
             email    TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
-            role     TEXT NOT NULL CHECK(role IN ('viewer','editor')),
+            role     TEXT NOT NULL CHECK(role IN ('viewer','editor','secretary','vice_principal')),
             name     TEXT NOT NULL
         )
     """)
@@ -196,10 +196,14 @@ def init_db():
     c.execute("""
         INSERT OR IGNORE INTO admins (email, password, role, name) VALUES
         (?, ?, 'editor', 'Admin Editor'),
-        (?, ?, 'viewer', 'Admin Viewer')
+        (?, ?, 'viewer', 'Admin Viewer'),
+        (?, ?, 'vice_principal', 'Vice Principal'),
+        (?, ?, 'secretary', 'Secretary')
     """, (
-        "editor@psgcas.ac.in", sha256("edit123"),
-        "viewer@psgcas.ac.in", sha256("view123"),
+        "editor@psgcas.ac.in",    sha256("edit123"),
+        "viewer@psgcas.ac.in",    sha256("view123"),
+        "vp@psgcas.ac.in",        sha256("vp@psgcas2024"),
+        "secretary@psgcas.ac.in", sha256("sec@psgcas2024"),
     ))
 
     conn.commit()
@@ -238,7 +242,8 @@ def editor_required(f):
     @wraps(f)
     @token_required
     def decorated(*args, **kwargs):
-        if g.current_user.get("role") != "editor":
+        # Accept both 'editor' (legacy) and 'vice_principal' role names
+        if g.current_user.get("role") not in ("editor", "vice_principal"):
             return jsonify(error="Insufficient permissions"), 403
         return f(*args, **kwargs)
     return decorated
