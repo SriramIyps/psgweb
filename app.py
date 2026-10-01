@@ -32,7 +32,38 @@ ALLOWED_SHEET  = {"csv", "xls", "xlsx"}
 app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app, supports_credentials=True)
 app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_MB * 1024 * 1024
+# Supabase Cloud Database Configuration
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://wguboyrruvmgnxjxtufl.supabase.co").rstrip("/")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndndWJveXJydXZtZ254anh0dWZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4MzAxNjAsImV4cCI6MjEwNjQwNjE2MH0.1WoC5BELtaBNqVpyctktV6adooKZ6m3t2I2K0gyFolo")
 
+def supabase_request(method, endpoint, body=None, params=None):
+    """Make a direct REST request to Supabase PostgREST API."""
+    import urllib.request
+    import urllib.parse
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return None
+
+    url = f"{SUPABASE_URL}/rest/v1/{endpoint.lstrip('/')}"
+    if params:
+        url += ("&" if "?" in url else "?") + urllib.parse.urlencode(params)
+
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation"
+    }
+
+    data_bytes = json.dumps(body).encode("utf-8") if body is not None else None
+    req = urllib.request.Request(url, data=data_bytes, headers=headers, method=method.upper())
+
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            content = resp.read().decode("utf-8")
+            return json.loads(content) if content else []
+    except Exception as e:
+        print(f"[Supabase] {method} {url} note:", e)
+        return None
 
 # ─────────────────────────────────────────────
 # DATABASE INIT
@@ -387,6 +418,105 @@ def submit_application():
             resume_path,
         ))
         db.commit()
+
+        # Also store in Supabase Cloud PostgreSQL
+        try:
+            app_record = {
+                "app_uuid": app_uuid,
+                "submitted_at": now,
+                "status": "Pending",
+                "admin_notes": "",
+                "position": f.get("position"),
+                "department": f.get("department"),
+                "name": f.get("name"),
+                "photo_path": photo_path,
+                "dob": f.get("dob"),
+                "gender": f.get("gender"),
+                "mother_tongue": f.get("mother_tongue"),
+                "religion": f.get("religion"),
+                "community": f.get("community"),
+                "category": f.get("category"),
+                "marital_status": f.get("marital_status"),
+                "spouse_name": f.get("spouse_name"),
+                "father_name": f.get("father_name"),
+                "diff_abled": f.get("diff_abled"),
+                "nature": f.get("nature"),
+                "aadhaar_no": f.get("aadhaar_no"),
+                "pan_no": f.get("pan_no"),
+                "mobile_no": f.get("mobile_no"),
+                "email": f.get("email"),
+                "native_address": f.get("native_address"),
+                "native_city": f.get("native_city"),
+                "native_state": f.get("native_state"),
+                "native_country": f.get("native_country"),
+                "native_pincode": f.get("native_pincode"),
+                "local_address": f.get("local_address"),
+                "local_city": f.get("local_city"),
+                "local_state": f.get("local_state"),
+                "local_country": f.get("local_country"),
+                "local_pincode": f.get("local_pincode"),
+                "languages": languages,
+                "education": education,
+                "net": "1" if f.get("net") else "0",
+                "set_slet": "1" if f.get("set") else "0",
+                "nss": "1" if f.get("nss") else "0",
+                "ncc": "1" if f.get("ncc") else "0",
+                "naac": "1" if f.get("naac") else "0",
+                "iqac": "1" if f.get("iqac") else "0",
+                "iso": "1" if f.get("iso") else "0",
+                "achivements": f.get("achivements"),
+                "sci": str(f.get("sci", 0)),
+                "scopus": str(f.get("scopus", 0)),
+                "ugc": str(f.get("ugc", 0)),
+                "others": str(f.get("others", 0)),
+                "scopus_id": f.get("scopus_id"),
+                "h_index_google": str(f.get("h_index_google", 0)),
+                "h_index_scopus": str(f.get("h_index_scopus", 0)),
+                "books_published_national": str(f.get("books_published_national", 0)),
+                "books_published_international": str(f.get("books_published_international", 0)),
+                "books_edited_national": str(f.get("books_edited_national", 0)),
+                "books_edited_international": str(f.get("books_edited_international", 0)),
+                "papers_path": papers_path,
+                "chapters_published_national": str(f.get("chapters_published_national", 0)),
+                "chapters_published_international": str(f.get("chapters_published_international", 0)),
+                "chapters_edited_national": str(f.get("chapters_edited_national", 0)),
+                "chapters_edited_international": str(f.get("chapters_edited_international", 0)),
+                "minor_projects": str(f.get("minor_projects", 0)),
+                "major_projects": str(f.get("major_projects", 0)),
+                "projects": projects,
+                "patents_applied": str(f.get("patents_applied", 0)),
+                "patents_published": str(f.get("patents_published", 0)),
+                "patents_granted": str(f.get("patents_granted", 0)),
+                "patents": patents,
+                "pdf_details": pdf_details,
+                "consultancy": f.get("consultancy"),
+                "teaching_experience": teaching_experience,
+                "industry_experience": industry_experience,
+                "name_1": f.get("name_1"),
+                "address_1": f.get("address_1"),
+                "designation_1": f.get("designation_1"),
+                "mobile_1": f.get("mobile_1"),
+                "email_1": f.get("email_1"),
+                "name_2": f.get("name_2"),
+                "address_2": f.get("address_2"),
+                "designation_2": f.get("designation_2"),
+                "mobile_2": f.get("mobile_2"),
+                "email_2": f.get("email_2"),
+                "last_pay": f.get("last_pay"),
+                "pay_expected": f.get("pay_expected"),
+                "join_time": f.get("join_time"),
+                "relative": f.get("relative"),
+                "already_attended": f.get("already_attended"),
+                "huk": f.get("huk"),
+                "comments": f.get("comments"),
+                "resume_path": resume_path
+            }
+            sb_res = supabase_request("POST", "applications", body=app_record)
+            if sb_res is not None:
+                print(f"[Supabase] Application stored in Supabase: {app_uuid}")
+        except Exception as _sbe:
+            print("[Supabase] Insert notice:", _sbe)
+
     except Exception as e:
         print("DB error:", e)
         return jsonify(error="Failed to save application. " + str(e)), 500
@@ -398,13 +528,28 @@ def submit_application():
 @token_required
 def get_applications():
     """Admin: list all applications with optional filters."""
-    db = get_db()
-    where, params = [], []
-
     position = request.args.get("position")
     dept     = request.args.get("department")
     status   = request.args.get("status")
     q        = request.args.get("q")
+
+    # 1. Try fetching from Supabase
+    try:
+        sb_params = {"select": "*", "order": "submitted_at.desc"}
+        if position: sb_params["position"] = f"eq.{position}"
+        if dept:     sb_params["department"] = f"eq.{dept}"
+        if status:   sb_params["status"] = f"eq.{status}"
+        if q:        sb_params["or"] = f"(name.ilike.*{q}*,email.ilike.*{q}*,department.ilike.*{q}*,position.ilike.*{q}*)"
+
+        sb_rows = supabase_request("GET", "applications", params=sb_params)
+        if sb_rows is not None and isinstance(sb_rows, list):
+            return jsonify(applications=sb_rows)
+    except Exception as _e:
+        print("[Supabase] fallback to SQLite:", _e)
+
+    # 2. Fallback to local SQLite
+    db = get_db()
+    where, params = [], []
 
     if position: where.append("position=?");   params.append(position)
     if dept:     where.append("department=?"); params.append(dept)
@@ -425,6 +570,14 @@ def get_applications():
 @app.route("/api/applications/<int:app_id>", methods=["GET"])
 @token_required
 def get_application(app_id):
+    # Try Supabase first
+    try:
+        sb_res = supabase_request("GET", "applications", params={"id": f"eq.{app_id}", "select": "*"})
+        if sb_res and isinstance(sb_res, list) and len(sb_res) > 0:
+            return jsonify(sb_res[0])
+    except Exception:
+        pass
+
     db = get_db()
     row = db.execute("SELECT * FROM applications WHERE id=?", (app_id,)).fetchone()
     if not row:
@@ -436,6 +589,31 @@ def get_application(app_id):
 @editor_required
 def update_application(app_id):
     """Editor only: update application fields or status/notes."""
+    data = request.get_json(force=True)
+    allowed_fields = {
+        "status", "admin_notes",
+        "name", "email", "mobile_no", "department", "position",
+        "dob", "gender", "mother_tongue", "religion", "community", "category",
+        "marital_status", "spouse_name", "father_name", "diff_abled", "nature",
+        "aadhaar_no", "pan_no", "native_address", "native_city", "native_state",
+        "native_country", "native_pincode", "local_address", "local_city",
+        "local_state", "local_country", "local_pincode", "achivements",
+        "sci", "scopus", "ugc", "others", "scopus_id", "h_index_google",
+        "h_index_scopus", "consultancy", "last_pay", "pay_expected",
+        "join_time", "relative", "already_attended", "huk", "comments",
+        "name_1", "address_1", "designation_1", "mobile_1", "email_1",
+        "name_2", "address_2", "designation_2", "mobile_2", "email_2",
+    }
+    updates = {k: v for k, v in data.items() if k in allowed_fields}
+    if not updates:
+        return jsonify(error="No valid fields to update"), 400
+
+    # Sync to Supabase
+    try:
+        supabase_request("PATCH", f"applications?id=eq.{app_id}", body=updates)
+    except Exception as _e:
+        print("[Supabase] update notice:", _e)
+
     db  = get_db()
     row = db.execute("SELECT id FROM applications WHERE id=?", (app_id,)).fetchone()
     if not row:
@@ -482,6 +660,12 @@ def delete_application(app_id):
             disk = os.path.join(BASE_DIR, path.lstrip("/"))
             if os.path.exists(disk):
                 os.remove(disk)
+
+    # Sync delete to Supabase
+    try:
+        supabase_request("DELETE", f"applications?id=eq.{app_id}")
+    except Exception as _e:
+        print("[Supabase] delete notice:", _e)
 
     db.execute("DELETE FROM applications WHERE id=?", (app_id,))
     db.commit()
