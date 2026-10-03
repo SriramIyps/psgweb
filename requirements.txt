@@ -4,3 +4,7 @@ werkzeug
 PyJWT
 gunicorn
 requests
+supabase>=2.0.0
+python-dotenv
+reportlab
+

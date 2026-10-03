@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PSG CAS - Staff Login</title>
+  <title>PSG CAS CONNECT — Sign In</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -25,7 +25,7 @@
     @keyframes blob { from { transform: translate(0,0) scale(1); } to { transform: translate(30px,30px) scale(1.1); } }
     .card {
       position: relative; z-index: 1;
-      width: 420px;
+      width: 440px;
       background: #1e293b;
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 20px; padding: 48px 40px;
@@ -61,6 +61,11 @@
     }
     .btn:hover:not(:disabled) { opacity:0.92; transform:translateY(-1px); }
     .btn:disabled { opacity:0.6; cursor:not-allowed; transform:none; }
+    .btn-secondary {
+      background: transparent; border: 1px solid rgba(255,255,255,0.15);
+      box-shadow: none; margin-top:12px;
+    }
+    .btn-secondary:hover:not(:disabled) { background: rgba(255,255,255,0.05); }
     .spinner {
       display:none; width:17px; height:17px;
       border:2px solid rgba(255,255,255,0.3); border-top-color:#fff;
@@ -73,13 +78,23 @@
       font-size:13px; padding:11px 14px; border-radius:10px;
       margin-top:14px; text-align:center;
     }
-    .hint {
-      margin-top:28px; padding-top:20px;
-      border-top:1px solid rgba(255,255,255,0.08);
-      font-size:11px; color:#475569; text-align:center;
+    .success-msg {
+      display:none; background:rgba(16,185,129,0.1);
+      border:1px solid rgba(16,185,129,0.3); color:#10b981;
+      font-size:13px; padding:11px 14px; border-radius:10px;
+      margin-top:14px; text-align:center;
     }
-    .hint strong { color:#64748b; }
-    .hint a { color:#94a3b8; }
+    .tabs { display:flex; gap:0; margin-bottom:28px; border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.08); }
+    .tab-btn { flex:1; padding:10px; background:transparent; color:#94a3b8; border:none; font-size:13px; font-weight:600; cursor:pointer; transition: all 0.2s; font-family:inherit; }
+    .tab-btn.active { background:rgba(123,28,28,0.3); color:#fff; }
+    .tab-btn:hover:not(.active) { background:rgba(255,255,255,0.03); }
+    .tab-panel { display:none; }
+    .tab-panel.active { display:block; }
+    .divider { display:flex; align-items:center; gap:12px; margin:20px 0; }
+    .divider::before, .divider::after { content:''; flex:1; height:1px; background:rgba(255,255,255,0.08); }
+    .divider span { font-size:11px; color:#475569; text-transform:uppercase; letter-spacing:1px; }
+    .hint { margin-top:24px; text-align:center; font-size:12px; color:#475569; }
+    .hint a { color:#94a3b8; text-decoration:underline; }
   </style>
 </head>
 <body>
@@ -88,62 +103,134 @@
     <img class="logo-img" src="assets/psgcas logo-2.png" alt="PSG CAS" onerror="this.style.display='none'" />
     <div class="logo-text">
       <strong>PSG College of Arts &amp; Science</strong>
-      <span>Staff Portal Login</span>
+      <span>CONNECT — Recruitment Portal</span>
     </div>
   </div>
-  <h1>Staff Sign In</h1>
-  <p class="subtitle">Authorised staff only. Sign in to access the applicant management portal.</p>
-  <form id="loginForm">
-    <div class="field">
-      <label for="email">Email Address</label>
-      <input type="email" id="email" placeholder="admin@psgcas.ac.in" autocomplete="email" required />
-    </div>
-    <div class="field">
-      <label for="password">Password</label>
-      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" required />
-    </div>
-    <button class="btn" type="submit" id="loginBtn">
-      <span id="btnText">Sign In</span>
-      <div class="spinner" id="spinner"></div>
-    </button>
-    <div class="err" id="errMsg"></div>
-  </form>
+
+  <!-- Tabs: Staff Login | Candidate -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('staff')">Staff Login</button>
+    <button class="tab-btn" onclick="switchTab('candidate-login')">Candidate Login</button>
+    <button class="tab-btn" onclick="switchTab('candidate-signup')">Candidate Sign Up</button>
+  </div>
+
+  <!-- ── STAFF LOGIN ── -->
+  <div class="tab-panel active" id="panel-staff">
+    <h1>Staff Sign In</h1>
+    <p class="subtitle">HOD, Vice Principal, HR, or Admin access.</p>
+    <form id="staffLoginForm">
+      <div class="field">
+        <label for="staff-email">Email Address</label>
+        <input type="email" id="staff-email" placeholder="admin@psgcas.ac.in" autocomplete="email" required />
+      </div>
+      <div class="field">
+        <label for="staff-password">Password</label>
+        <input type="password" id="staff-password" placeholder="••••••••" autocomplete="current-password" required />
+      </div>
+      <button class="btn" type="submit" id="staffLoginBtn">
+        <span id="staffBtnText">Sign In</span>
+        <div class="spinner" id="staffSpinner"></div>
+      </button>
+      <div class="err" id="staffErr"></div>
+    </form>
+  </div>
+
+  <!-- ── CANDIDATE LOGIN ── -->
+  <div class="tab-panel" id="panel-candidate-login">
+    <h1>Candidate Sign In</h1>
+    <p class="subtitle">Track your application status.</p>
+    <form id="candidateLoginForm">
+      <div class="field">
+        <label for="cand-email">Email Address</label>
+        <input type="email" id="cand-email" placeholder="you@example.com" autocomplete="email" required />
+      </div>
+      <div class="field">
+        <label for="cand-password">Password</label>
+        <input type="password" id="cand-password" placeholder="••••••••" autocomplete="current-password" required />
+      </div>
+      <button class="btn" type="submit" id="candLoginBtn">
+        <span id="candLoginBtnText">Sign In</span>
+        <div class="spinner" id="candLoginSpinner"></div>
+      </button>
+      <div class="err" id="candLoginErr"></div>
+    </form>
+  </div>
+
+  <!-- ── CANDIDATE SIGNUP ── -->
+  <div class="tab-panel" id="panel-candidate-signup">
+    <h1>Create Account</h1>
+    <p class="subtitle">Sign up to submit and track your application.</p>
+    <form id="candidateSignupForm">
+      <div class="field">
+        <label for="signup-name">Full Name</label>
+        <input type="text" id="signup-name" placeholder="Dr. Arun Kumar" required />
+      </div>
+      <div class="field">
+        <label for="signup-email">Email Address</label>
+        <input type="email" id="signup-email" placeholder="you@example.com" autocomplete="email" required />
+      </div>
+      <div class="field">
+        <label for="signup-password">Password</label>
+        <input type="password" id="signup-password" placeholder="Min 6 characters" autocomplete="new-password" required minlength="6" />
+      </div>
+      <button class="btn" type="submit" id="signupBtn">
+        <span id="signupBtnText">Create Account</span>
+        <div class="spinner" id="signupSpinner"></div>
+      </button>
+      <div class="err" id="signupErr"></div>
+      <div class="success-msg" id="signupSuccess"></div>
+    </form>
+  </div>
+
   <div class="hint">
-    <strong>Secretary:</strong> secretary@psgcas.ac.in / sec@psgcas2024<br>
-    <strong>Vice Principal:</strong> vp@psgcas.ac.in / vp@psgcas2024
+    <a href="index.html">← Back to Careers Page</a>
   </div>
 </div>
 
 <script>
+  // ── ROLE → PAGE MAP ──
+  var ROLE_REDIRECT = {
+    'candidate':  'candidate.html',
+    'hod':        'hod.html',
+    'superadmin': 'vp.html',
+    'hr':         'hr.html',
+    'admin':      'admin.html'
+  };
+
   // If already logged in, redirect
   var exToken = sessionStorage.getItem('psg_token');
   var exRole  = sessionStorage.getItem('psg_role');
-  if (exToken && exRole) {
-    if (exRole === 'viewer' || exRole === 'secretary') window.location.href = 'secretary.html';
-    else if (exRole === 'editor' || exRole === 'vice_principal') window.location.href = 'vp.html';
+  if (exToken && exRole && ROLE_REDIRECT[exRole]) {
+    window.location.href = ROLE_REDIRECT[exRole];
   }
 
-  var loginBtn = document.getElementById('loginBtn');
-  var btnText  = document.getElementById('btnText');
-  var spinner  = document.getElementById('spinner');
-  var errMsg   = document.getElementById('errMsg');
-
-  function setLoading(on) {
-    loginBtn.disabled     = on;
-    btnText.style.display = on ? 'none'  : 'block';
-    spinner.style.display = on ? 'block' : 'none';
+  // ── TAB SWITCHING ──
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(function(b, i) { b.classList.remove('active'); });
+    document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+    document.getElementById('panel-' + tab).classList.add('active');
+    // Highlight correct tab
+    var tabs = ['staff', 'candidate-login', 'candidate-signup'];
+    var idx = tabs.indexOf(tab);
+    if (idx >= 0) document.querySelectorAll('.tab-btn')[idx].classList.add('active');
   }
 
-  document.getElementById('loginForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    errMsg.style.display = 'none';
-    setLoading(true);
+  // ── HELPERS ──
+  function setLoading(btn, textEl, spinnerEl, on) {
+    btn.disabled = on;
+    textEl.style.display = on ? 'none' : '';
+    spinnerEl.style.display = on ? 'block' : 'none';
+  }
 
-    var email    = document.getElementById('email').value.trim();
-    var password = document.getElementById('password').value.trim();
+  function showErr(el, msg) { el.textContent = msg; el.style.display = 'block'; }
+  function hideErr(el) { el.style.display = 'none'; }
+
+  async function doLogin(email, password, errEl, btn, textEl, spinnerEl) {
+    hideErr(errEl);
+    setLoading(btn, textEl, spinnerEl, true);
 
     try {
-      var res  = await fetch('/api/login', {
+      var res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email, password: password })
@@ -151,37 +238,101 @@
       var data = await res.json();
 
       if (!res.ok) {
-        setLoading(false);
-        errMsg.textContent   = data.error || 'Login failed. Please try again.';
-        errMsg.style.display = 'block';
+        setLoading(btn, textEl, spinnerEl, false);
+        showErr(errEl, data.error || 'Login failed.');
         return;
       }
 
+      // Store session
       sessionStorage.setItem('psg_token', data.token);
-      sessionStorage.setItem('psg_role',  data.role);
+      sessionStorage.setItem('psg_role', data.role);
       sessionStorage.setItem('psg_email', data.email);
-      sessionStorage.setItem('psg_name',  data.name || '');
+      sessionStorage.setItem('psg_name', data.name || '');
+      sessionStorage.setItem('psg_department', data.department || '');
 
-      btnText.style.display = 'block';
-      spinner.style.display = 'none';
-      loginBtn.textContent  = '\u2013 Redirecting\u2026';
-
-      // Route by role
-      if (data.role === 'viewer' || data.role === 'secretary') {
-        window.location.href = 'secretary.html';
-      } else if (data.role === 'editor' || data.role === 'vice_principal') {
-        window.location.href = 'vp.html';
+      // Redirect by role
+      var dest = ROLE_REDIRECT[data.role];
+      if (dest) {
+        window.location.href = dest;
       } else {
         sessionStorage.clear();
-        setLoading(false);
-        errMsg.textContent   = 'Unknown role. Contact administrator.';
-        errMsg.style.display = 'block';
+        setLoading(btn, textEl, spinnerEl, false);
+        showErr(errEl, 'Unknown role. Contact administrator.');
       }
 
     } catch (err) {
-      setLoading(false);
-      errMsg.textContent   = 'Cannot connect to server. Is the server running?';
-      errMsg.style.display = 'block';
+      setLoading(btn, textEl, spinnerEl, false);
+      showErr(errEl, 'Cannot connect to server.');
+    }
+  }
+
+  // ── STAFF LOGIN ──
+  document.getElementById('staffLoginForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var email = document.getElementById('staff-email').value.trim();
+    var pw = document.getElementById('staff-password').value.trim();
+    doLogin(email, pw, document.getElementById('staffErr'),
+      document.getElementById('staffLoginBtn'),
+      document.getElementById('staffBtnText'),
+      document.getElementById('staffSpinner'));
+  });
+
+  // ── CANDIDATE LOGIN ──
+  document.getElementById('candidateLoginForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var email = document.getElementById('cand-email').value.trim();
+    var pw = document.getElementById('cand-password').value.trim();
+    doLogin(email, pw, document.getElementById('candLoginErr'),
+      document.getElementById('candLoginBtn'),
+      document.getElementById('candLoginBtnText'),
+      document.getElementById('candLoginSpinner'));
+  });
+
+  // ── CANDIDATE SIGNUP ──
+  document.getElementById('candidateSignupForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    var name = document.getElementById('signup-name').value.trim();
+    var email = document.getElementById('signup-email').value.trim();
+    var pw = document.getElementById('signup-password').value.trim();
+    var errEl = document.getElementById('signupErr');
+    var successEl = document.getElementById('signupSuccess');
+    var btn = document.getElementById('signupBtn');
+    var textEl = document.getElementById('signupBtnText');
+    var spinnerEl = document.getElementById('signupSpinner');
+
+    hideErr(errEl);
+    successEl.style.display = 'none';
+    setLoading(btn, textEl, spinnerEl, true);
+
+    try {
+      var res = await fetch('/api/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, password: pw, full_name: name })
+      });
+      var data = await res.json();
+
+      if (!res.ok) {
+        setLoading(btn, textEl, spinnerEl, false);
+        showErr(errEl, data.error || 'Signup failed.');
+        return;
+      }
+
+      if (data.token) {
+        // Auto-confirmed — log in immediately
+        sessionStorage.setItem('psg_token', data.token);
+        sessionStorage.setItem('psg_role', 'candidate');
+        sessionStorage.setItem('psg_email', data.email);
+        sessionStorage.setItem('psg_name', data.name || name);
+        window.location.href = 'candidate.html';
+      } else {
+        setLoading(btn, textEl, spinnerEl, false);
+        successEl.textContent = data.message || 'Account created! Check your email to confirm.';
+        successEl.style.display = 'block';
+      }
+    } catch (err) {
+      setLoading(btn, textEl, spinnerEl, false);
+      showErr(errEl, 'Cannot connect to server.');
     }
   });
 </script>

@@ -67,12 +67,14 @@
     .btn { display: inline-flex; align-items: center; justify-content: center; padding: .5rem 1.25rem; border-radius: .5rem; font-size: .875rem; font-weight: 500; cursor: pointer; border: none; transition: background .15s; }
     .btn-primary { background: #002e5b; color: #fff; }
     .btn-primary:hover { background: #001e3c; }
+    .btn-secondary { background: #475569; color: #fff; }
+    .btn-secondary:hover { background: #334155; }
     .btn-danger  { background: #ef4444; color: #fff; }
     .btn-danger:hover { background: #dc2626; }
     .btn:disabled { opacity: .6; cursor: not-allowed; }
 
     /* Dynamic row containers */
-    .dyn-row { border: 1px solid #e2e8f0; border-radius: .5rem; padding: .75rem; margin-bottom: .5rem; }
+    .dyn-row { border: 1px solid #e2e8f0; border-radius: .5rem; padding: .75rem; margin-bottom: .5rem; background: #f8fafc; }
     .add-more { cursor: pointer; margin: .375rem 0; }
     .add-more .d-flex { color: #002e5b; font-size: .875rem; font-weight: 500; gap: .375rem; align-items: center; }
     .add-more:hover { opacity: .8; }
@@ -100,28 +102,9 @@
     .ref-card { background: #f0fdf4; border: 2px dashed #86efac; border-radius: 1rem; padding: 1rem 1.25rem; margin: 1rem 0; text-align: center; }
     .ref-label { font-size: .725rem; font-weight: 700; color: #166534; letter-spacing: .08em; text-transform: uppercase; margin-bottom: .35rem; }
     .ref-code { font-size: 1.75rem; font-weight: 800; color: #14532d; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: .06em; }
-    .btn-copy { margin-top: .6rem; background: #dcfce7; color: #166534; border: 1px solid #86efac; border-radius: 9999px; padding: .35rem 1rem; font-size: .8rem; font-weight: 600; cursor: pointer; transition: all .15s; }
-    .btn-copy:hover { background: #bbf7d0; }
-    .ack-details { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: .75rem; padding: .75rem 1rem; text-align: left; font-size: .8125rem; margin-bottom: 1rem; }
-    .ack-row { display: flex; justify-content: space-between; padding: .3rem 0; border-bottom: 1px solid #f1f5f9; gap: .5rem; }
-    .ack-row:last-child { border-bottom: none; }
-    .ack-row span { color: #64748b; }
-    .ack-row strong { color: #1e293b; text-align: right; }
-    .ack-notice { font-size: .775rem; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: .5rem; padding: .65rem .85rem; text-align: left; }
-    .btn-print { padding: .625rem 1.25rem; background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: .5rem; font-size: .875rem; font-weight: 600; cursor: pointer; transition: background .15s; }
-    .btn-print:hover { background: #e2e8f0; }
-    .btn-ok { padding: .625rem 1.5rem; background: #002e5b; color: #fff; border-radius: .5rem; border: none; font-size: .875rem; font-weight: 600; cursor: pointer; }
-    .btn-ok:hover { background: #001f3f; }
-    @media print {
-      body * { visibility: hidden; }
-      #success-overlay, #success-overlay * { visibility: visible; }
-      #success-overlay { position: absolute; left: 0; top: 0; width: 100%; background: #fff; display: block !important; padding: 0; }
-      .success-box { box-shadow: none; border: 1px solid #cbd5e1; max-width: 100%; border-radius: 0; padding: 2rem; }
-      .btn-print, .btn-ok, .btn-copy { display: none !important; }
-    }
 
-    /* Error banner */
     .form-error-banner { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: .5rem; padding: .75rem 1rem; font-size: .875rem; margin-bottom: 1rem; display: none; }
+    .lock-banner { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: .5rem; padding: .75rem 1rem; font-size: .875rem; margin-bottom: 1rem; display: none; font-weight: 600; }
 
     section { margin-bottom: .5rem; }
   </style>
@@ -134,7 +117,7 @@
     <img src="assets/psgcas logo-2.png" alt="PSG CAS">
     <span>PSG College of Arts &amp; Science</span>
   </div>
-  <a href="index.html" class="btn-back">&#8592; Back to Careers</a>
+  <a href="candidate.html" class="btn-back">&#8592; Back to Candidate Portal</a>
 </div>
 
 <div class="container" style="margin-top:2rem;margin-bottom:3rem;">
@@ -155,14 +138,12 @@
         <ul>
           <li><b>All Fields are Mandatory. If Not Applicable, Type NA</b></li>
           <li>Qualification details should start from your class 10.</li>
-          <li>If multiple applications found from an individual for same department, the last application will be considered.</li>
-          <li>Please verify your details before submitting the application.</li>
+          <li>You can save a Draft anytime. Final submission locks your application permanently.</li>
         </ul>
-        <hr>
-        <p>For any Assistance / Enquiry mail to <a href="mailto:noreply@psgcas.ac.in">noreply@psgcas.ac.in</a></p>
       </div>
 
       <div class="card-body">
+        <div id="lock-banner" class="lock-banner">🔒 This application has been submitted and is locked for editing.</div>
         <div id="form-error-banner" class="form-error-banner"></div>
 
         <!-- ── Position + Department ── -->
@@ -185,23 +166,7 @@
             <div class="form-group col-md-12">
               <label class="control-label">Select the Department applying for <span class="required">*</span></label>
               <select name="department" class="form-select form-select-sm" required id="id_department">
-                <option value="">---------</option>
-                <option>Biochemistry</option><option>Biotechnology</option><option>Botany</option>
-                <option>Carnatic Music</option><option>Catering Science &amp; Hotel Management</option>
-                <option>Chemistry</option><option>Clinical Nutrition &amp; Dietetics</option>
-                <option>Commerce</option><option>Commerce with International Business</option>
-                <option>Computer Science</option><option>Corporate Secretaryship</option>
-                <option>Costume Design &amp; Fashion</option><option>Economics</option>
-                <option>Electronics &amp; Applied Electronics</option><option>English</option>
-                <option>Environmental Sciences</option><option>Food Processing Technology</option>
-                <option>French</option><option>Hindi</option><option>Hospital Administration</option>
-                <option>Hospitality Management</option><option>Management Science - UG</option>
-                <option>Master of Business Administration (MBA)</option><option>Mathematics</option>
-                <option>Microbiology</option><option>Nutrition,Food Service Management &amp; Dietetics</option>
-                <option>Physics</option><option>Psychology</option><option>Social Work</option>
-                <option>Sociology</option><option>Statistics</option><option>Tamil</option>
-                <option>Visual communication</option><option>Visual Communication &amp; Electronic Media</option>
-                <option>Zoology</option>
+                <option value="">Loading departments…</option>
               </select>
             </div>
           </div>
@@ -212,518 +177,500 @@
         <section>
           <div class="row"><h5 class="card-title-menu">Personal Details</h5></div>
           <div class="row">
-            <div class="form-group col-md-3"><label class="control-label">Name of the Applicant <span class="required">*</span></label><input type="text" name="name" maxlength="50" class="form-control" required></div>
-            <div class="form-group col-md-3"><label class="control-label">Upload Photo <span class="required">*</span></label><input type="file" name="photo" accept="image/*" class="form-control form-control-sm" required></div>
-            <div class="form-group col-md-3"><label class="control-label">Date of Birth <span class="required">*</span></label><input type="date" name="dob" class="form-control" required id="id_dob"><div id="dob_error" style="color:red;font-size:12px;display:none;margin-top:3px;"></div></div>
-            <div class="form-group col-md-3"><label class="control-label">Gender <span class="required">*</span></label><select name="gender" class="form-select form-select-sm" required><option value="">---------</option><option>Male</option><option>Female</option><option>Transgender</option></select></div>
+            <div class="form-group col-md-3"><label class="control-label">Name of Applicant <span class="required">*</span></label><input type="text" name="name" maxlength="50" class="form-control" required></div>
+            <div class="form-group col-md-3"><label class="control-label">Upload Photo</label><input type="file" name="photo" accept="image/*" class="form-control form-control-sm"></div>
+            <div class="form-group col-md-3"><label class="control-label">Date of Birth <span class="required">*</span></label><input type="date" name="dob" class="form-control" required id="id_dob"></div>
+            <div class="form-group col-md-3"><label class="control-label">Gender <span class="required">*</span></label><select name="gender" class="form-select form-select-sm" required><option value="">---</option><option>Male</option><option>Female</option><option>Transgender</option></select></div>
           </div>
           <div class="row">
             <div class="form-group col-md-3"><label class="control-label">Mother Tongue <span class="required">*</span></label><input type="text" name="mother_tongue" maxlength="50" class="form-control" required></div>
             <div class="form-group col-md-3"><label class="control-label">Religion <span class="required">*</span></label><input type="text" name="religion" maxlength="50" class="form-control" required></div>
             <div class="form-group col-md-3"><label class="control-label">Community <span class="required">*</span></label><input type="text" name="community" maxlength="50" class="form-control" required></div>
-            <div class="form-group col-md-3"><label class="control-label">Category <span class="required">*</span></label><select name="category" class="form-select form-select-sm" required><option value="">---------</option><option>FC</option><option>BC</option><option>OBC</option><option>BMC</option><option>MBC</option><option>SC</option><option>ST</option><option>DNC</option><option>OTHERS</option></select></div>
+            <div class="form-group col-md-3"><label class="control-label">Category <span class="required">*</span></label><select name="category" class="form-select form-select-sm" required><option value="">---</option><option>FC</option><option>BC</option><option>OBC</option><option>MBC</option><option>SC</option><option>ST</option><option>OTHERS</option></select></div>
           </div>
           <div class="row">
-            <div class="form-group col-md-4"><label class="control-label">Marital Status <span class="required">*</span></label><select name="marital_status" class="form-select form-select-sm" required><option value="">---------</option><option>Single</option><option>Married</option><option>Divorced</option><option>Widow</option></select></div>
-            <div class="form-group col-md-4"><label class="control-label">Spouse Name</label><input type="text" name="spouse_name" maxlength="50" class="form-control"></div>
             <div class="form-group col-md-4"><label class="control-label">Father's Name <span class="required">*</span></label><input type="text" name="father_name" maxlength="50" class="form-control" required></div>
-          </div>
-          <div class="row">
-            <div class="form-group col-md-3"><label class="control-label">Physically Challenged <span class="required">*</span></label><select name="diff_abled" class="form-select form-select-sm" required><option value="">---------</option><option>Yes</option><option>No</option></select></div>
-            <div class="form-group col-md-3"><label class="control-label">Nature of Challenge</label><input type="text" name="nature" maxlength="30" class="form-control"></div>
-            <div class="form-group col-md-3"><label class="control-label">Aadhaar No. <span class="required">*</span></label><input type="text" name="aadhaar_no" maxlength="12" class="form-control" required></div>
-            <div class="form-group col-md-3"><label class="control-label">PAN No. <span class="required">*</span></label><input type="text" name="pan_no" maxlength="10" class="form-control" required></div>
-          </div>
-          <div class="row">
-            <div class="form-group col-md-6"><label class="control-label">Mobile No. <span class="required">*</span></label><input type="text" name="mobile_no" maxlength="15" class="form-control" required></div>
-            <div class="form-group col-md-6"><label class="control-label">Email <span class="required">*</span></label><input type="email" name="email" maxlength="254" class="form-control" required></div>
-          </div>
-
-          <!-- Permanent Address -->
-          <div class="row">
-            <div class="form-group col-md-3"><label class="control-label">Permanent Address <span class="required">*</span></label><input type="text" name="native_address" maxlength="50" id="permAddr" class="form-control" required></div>
-            <div class="form-group col-md-3"><label class="control-label">City <span class="required">*</span></label><input type="text" name="native_city" maxlength="50" id="permCity" class="form-control" required></div>
-            <div class="form-group col-md-2"><label class="control-label">State <span class="required">*</span></label><input type="text" name="native_state" maxlength="50" id="permState" class="form-control" required></div>
-            <div class="form-group col-md-2"><label class="control-label">Country <span class="required">*</span></label><input type="text" name="native_country" maxlength="50" id="permCountry" class="form-control" required></div>
-            <div class="form-group col-md-2"><label class="control-label">Pincode <span class="required">*</span></label><input type="text" name="native_pincode" maxlength="10" id="permPin" class="form-control" required></div>
-          </div>
-          <div class="form-check" style="margin:.3rem 0 .75rem;">
-            <input class="form-check-input" type="checkbox" id="copy-address">
-            <label class="form-check-label" for="copy-address">Communication address same as permanent address</label>
-          </div>
-          <!-- Communication Address -->
-          <div class="row">
-            <div class="form-group col-md-3"><label class="control-label">Communication Address <span class="required">*</span></label><input type="text" name="local_address" maxlength="50" id="localAddr" class="form-control" required></div>
-            <div class="form-group col-md-3"><label class="control-label">City <span class="required">*</span></label><input type="text" name="local_city" maxlength="50" id="localCity" class="form-control" required></div>
-            <div class="form-group col-md-2"><label class="control-label">State <span class="required">*</span></label><input type="text" name="local_state" maxlength="50" id="localState" class="form-control" required></div>
-            <div class="form-group col-md-2"><label class="control-label">Country <span class="required">*</span></label><input type="text" name="local_country" maxlength="50" id="localCountry" class="form-control" required></div>
-            <div class="form-group col-md-2"><label class="control-label">Pincode <span class="required">*</span></label><input type="text" name="local_pincode" maxlength="10" id="localPin" class="form-control" required></div>
-          </div>
-
-          <!-- Languages -->
-          <div id="language-container"></div>
-          <div class="add-more" id="add-lang"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add Language</div></div>
-          <hr class="hr">
-        </section>
-
-        <!-- ── Educational Details ── -->
-        <section>
-          <div class="row"><h5 class="card-title-menu">Educational Details <small style="font-size:14px;">(Mandatory from 10th Std)</small></h5></div>
-          <div class="row align-items-end">
-            <div class="form-group col-md-6"><label class="control-label">Eligibility Test</label><div class="row-check"><input type="checkbox" name="net" class="form-check-input" id="id_net"><label for="id_net" class="form-check-label">NET</label><input type="checkbox" name="set" class="form-check-input" id="id_set"><label for="id_set" class="form-check-label">SET / SLET</label></div></div>
-            <div class="form-group col-md-6"><label class="control-label">Extra Curricular Activities</label><div class="row-check"><input type="checkbox" name="nss" class="form-check-input"><label class="form-check-label">NSS</label><input type="checkbox" name="ncc" class="form-check-input"><label class="form-check-label">NCC</label><input type="checkbox" name="naac" class="form-check-input"><label class="form-check-label">NAAC</label><input type="checkbox" name="iqac" class="form-check-input"><label class="form-check-label">IQAC</label><input type="checkbox" name="iso" class="form-check-input"><label class="form-check-label">ISO</label></div></div>
-          </div>
-          <div id="edu-container"></div>
-          <div class="add-more" id="add-edu"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add Education Row</div></div>
-          <div class="row" style="margin-top:.75rem;">
-            <div class="form-group col-md-12"><label class="control-label">Special Achievements in academics, if any (max 300 words)</label><textarea name="achivements" rows="4" class="form-control" required></textarea></div>
+            <div class="form-group col-md-4"><label class="control-label">Mobile No. <span class="required">*</span></label><input type="text" name="mobile_no" maxlength="15" class="form-control" required></div>
+            <div class="form-group col-md-4"><label class="control-label">Email <span class="required">*</span></label><input type="email" name="email" maxlength="254" class="form-control" required></div>
           </div>
           <hr class="hr">
         </section>
 
-        <!-- ── Research Contribution ── -->
+        <!-- ── STRUCTURED RESEARCH DATA CAPTURE ── -->
         <section id="research-section">
-          <div class="row"><h5 class="card-title-menu">Research Contribution (if any)</h5></div>
-          <div class="row"><h6 class="card-subtitle-menu">Papers Published</h6></div>
+          <div class="row"><h5 class="card-title-menu">Research & Publications</h5></div>
+
+          <!-- Publications Row Builder -->
+          <div class="row"><h6 class="card-subtitle-menu">1. Publications</h6></div>
+          <div id="pub-container"></div>
+          <div class="add-more" id="add-pub"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add Publication</div></div>
+
+          <!-- Patents Row Builder -->
+          <div class="row"><h6 class="card-subtitle-menu" style="margin-top:1rem;">2. Patents</h6></div>
+          <div id="pat-container"></div>
+          <div class="add-more" id="add-pat"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add Patent</div></div>
+
+          <!-- Consultancy Row Builder -->
+          <div class="row"><h6 class="card-subtitle-menu" style="margin-top:1rem;">3. Consultancy Projects</h6></div>
+          <div id="con-container"></div>
+          <div class="add-more" id="add-con"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add Consultancy</div></div>
+
+          <!-- Research Projects Row Builder -->
+          <div class="row"><h6 class="card-subtitle-menu" style="margin-top:1rem;">4. Research Projects</h6></div>
+          <div id="prj-container"></div>
+          <div class="add-more" id="add-prj"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add Research Project</div></div>
+
+          <!-- Quality & Administrative Roles -->
+          <div class="row"><h6 class="card-subtitle-menu" style="margin-top:1rem;">5. Quality Assurance & Administrative Experience</h6></div>
           <div class="row">
-            <div class="form-group col-md-3"><label class="control-label">SCI / WOS</label><input type="number" name="sci" value="0" class="form-control" min="0"></div>
-            <div class="form-group col-md-3"><label class="control-label">Scopus</label><input type="number" name="scopus" value="0" class="form-control" min="0"></div>
-            <div class="form-group col-md-3"><label class="control-label">UGC Care</label><input type="number" name="ugc" value="0" class="form-control" min="0"></div>
-            <div class="form-group col-md-3"><label class="control-label">Other</label><input type="number" name="others" value="0" class="form-control" min="0"></div>
+            <div class="form-group col-md-4">
+              <div class="form-check" style="margin-top:1.5rem;">
+                <input type="checkbox" name="iso_involvement" class="form-check-input" id="id_iso">
+                <label class="form-check-label" for="id_iso">ISO Involvement</label>
+              </div>
+            </div>
+            <div class="form-group col-md-8">
+              <label class="control-label">ISO Involvement Details</label>
+              <input type="text" name="iso_details" class="form-control" placeholder="e.g. ISO Lead Auditor / Coordinator">
+            </div>
           </div>
           <div class="row">
-            <div class="form-group col-md-4"><label class="control-label">Scopus ID</label><input type="text" name="scopus_id" value="NA" class="form-control"></div>
-            <div class="form-group col-md-4"><label class="control-label">H-Index (Google Scholar)</label><input type="number" name="h_index_google" value="0" class="form-control" min="0"></div>
-            <div class="form-group col-md-4"><label class="control-label">H-Index (Scopus)</label><input type="number" name="h_index_scopus" value="0" class="form-control" min="0"></div>
+            <div class="form-group col-md-12">
+              <label class="control-label">NAAC / IQAC Experience Details</label>
+              <textarea name="naac_iqac_details" rows="2" class="form-control" placeholder="Details of NAAC SSR preparation, IQAC committee roles, etc."></textarea>
+            </div>
           </div>
-          <div class="row"><h6 class="card-subtitle-menu">Books Published</h6></div>
-          <div class="row"><div class="form-group col-md-6"><label class="control-label">National</label><input type="number" name="books_published_national" value="0" class="form-control" min="0"></div><div class="form-group col-md-6"><label class="control-label">International</label><input type="number" name="books_published_international" value="0" class="form-control" min="0"></div></div>
-          <div class="row"><h6 class="card-subtitle-menu">Books Edited</h6></div>
-          <div class="row"><div class="form-group col-md-6"><label class="control-label">National</label><input type="number" name="books_edited_national" value="0" class="form-control" min="0"></div><div class="form-group col-md-6"><label class="control-label">International</label><input type="number" name="books_edited_international" value="0" class="form-control" min="0"></div></div>
-          <div class="row"><div class="form-group col-md-12"><label class="control-label">Attach Books/Papers list (.xlsx/.xls/.csv)</label><input type="file" name="papers" accept=".csv,.xlsx,.xls" class="form-control form-control-sm"></div></div>
-          <div class="row"><h6 class="card-subtitle-menu">Chapters Published</h6></div>
-          <div class="row"><div class="form-group col-md-6"><label class="control-label">National</label><input type="number" name="chapters_published_national" value="0" class="form-control" min="0"></div><div class="form-group col-md-6"><label class="control-label">International</label><input type="number" name="chapters_published_international" value="0" class="form-control" min="0"></div></div>
-          <div class="row"><h6 class="card-subtitle-menu">Chapters Edited</h6></div>
-          <div class="row"><div class="form-group col-md-6"><label class="control-label">National</label><input type="number" name="chapters_edited_national" value="0" class="form-control" min="0"></div><div class="form-group col-md-6"><label class="control-label">International</label><input type="number" name="chapters_edited_international" value="0" class="form-control" min="0"></div></div>
-          <div class="row"><h6 class="card-subtitle-menu">Projects</h6></div>
-          <div class="row"><div class="form-group col-md-6"><label class="control-label">Minor Projects</label><input type="number" name="minor_projects" value="0" class="form-control" min="0"></div><div class="form-group col-md-6"><label class="control-label">Major Projects</label><input type="number" name="major_projects" value="0" class="form-control" min="0"></div></div>
-          <div id="projects-container"></div>
-          <div class="add-more" id="add-project"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add Project Details</div></div>
-          <div class="row"><h6 class="card-subtitle-menu">Patents</h6></div>
-          <div class="row"><div class="form-group col-md-4"><label class="control-label">Applied</label><input type="number" name="patents_applied" value="0" class="form-control" min="0"></div><div class="form-group col-md-4"><label class="control-label">Published</label><input type="number" name="patents_published" value="0" class="form-control" min="0"></div><div class="form-group col-md-4"><label class="control-label">Granted</label><input type="number" name="patents_granted" value="0" class="form-control" min="0"></div></div>
-          <div id="patents-container"></div>
-          <div class="add-more" id="add-patent"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add Patent Details</div></div>
-          <div class="row"><h6 class="card-subtitle-menu">Post Doctoral Fellowship (PDF)</h6></div>
-          <div id="pdf-container"></div>
-          <div class="add-more" id="add-pdf"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add PDF Details</div></div>
-          <div class="row" style="margin-top:.5rem;"><div class="form-group col-md-12"><label class="control-label">Consultancy Details</label><textarea name="consultancy" rows="3" class="form-control"></textarea></div></div>
+
+          <div class="row"><h6 class="card-subtitle-menu" style="margin-top:.75rem;">Administrative Positions Held</h6></div>
+          <div id="admin-container"></div>
+          <div class="add-more" id="add-admin-pos"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add Administrative Position</div></div>
           <hr class="hr">
         </section>
 
-        <!-- ── Work Experience ── -->
+        <!-- ── Resume Upload & Declaration ── -->
         <section>
-          <div class="row"><h5 class="card-title-menu">Work Experience</h5></div>
-          <div class="row"><h6 class="card-subtitle-menu">Teaching Experience</h6></div>
-          <div id="teaching-container"></div>
-          <div class="add-more" id="add-teaching"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add Teaching Experience</div></div>
-          <div class="row"><h6 class="card-subtitle-menu" style="margin-top:.75rem;">Industry Experience</h6></div>
-          <div id="industry-container"></div>
-          <div class="add-more" id="add-industry"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add Industry Experience</div></div>
-          <hr class="hr">
-        </section>
-
-        <!-- ── Others ── -->
-        <section>
-          <div class="row"><h5 class="card-title-menu">Others</h5></div>
-          <div class="row">
-            <div class="form-group col-md-3"><label class="control-label">Reference Name 1 <span class="required">*</span></label><input type="text" name="name_1" maxlength="50" class="form-control" required></div>
-            <div class="form-group col-md-3"><label class="control-label">Address <span class="required">*</span></label><input type="text" name="address_1" maxlength="50" class="form-control" required></div>
-            <div class="form-group col-md-2"><label class="control-label">Designation <span class="required">*</span></label><input type="text" name="designation_1" maxlength="50" class="form-control" required></div>
-            <div class="form-group col-md-2"><label class="control-label">Mobile <span class="required">*</span></label><input type="text" name="mobile_1" maxlength="15" class="form-control" required></div>
-            <div class="form-group col-md-2"><label class="control-label">Email <span class="required">*</span></label><input type="text" name="email_1" maxlength="50" class="form-control" required></div>
-          </div>
-          <div class="row">
-            <div class="form-group col-md-3"><label class="control-label">Reference Name 2 <span class="required">*</span></label><input type="text" name="name_2" maxlength="50" class="form-control" required></div>
-            <div class="form-group col-md-3"><label class="control-label">Address <span class="required">*</span></label><input type="text" name="address_2" maxlength="50" class="form-control" required></div>
-            <div class="form-group col-md-2"><label class="control-label">Designation <span class="required">*</span></label><input type="text" name="designation_2" maxlength="50" class="form-control" required></div>
-            <div class="form-group col-md-2"><label class="control-label">Mobile <span class="required">*</span></label><input type="text" name="mobile_2" maxlength="15" class="form-control" required></div>
-            <div class="form-group col-md-2"><label class="control-label">Email <span class="required">*</span></label><input type="text" name="email_2" maxlength="50" class="form-control" required></div>
-          </div>
-          <div class="row">
-            <div class="form-group col-md-4"><label class="control-label">Last Monthly Pay</label><div class="input-group"><span class="input-group-text">&#8377;</span><input type="number" name="last_pay" value="0" class="form-control" min="0"></div></div>
-            <div class="form-group col-md-4"><label class="control-label">Expected Pay <span class="required">*</span></label><div class="input-group"><span class="input-group-text">&#8377;</span><input type="number" name="pay_expected" value="0" class="form-control" required min="0"></div></div>
-            <div class="form-group col-md-4"><label class="control-label">Joining Time Required <span class="required">*</span></label><input type="text" name="join_time" maxlength="50" class="form-control" required></div>
-          </div>
-          <div class="row"><div class="form-group col-md-12"><label class="control-label">Close relatives employed in PSG Institutions (Name, Relationship, Designation, Institution, etc.)</label><textarea name="relative" rows="3" class="form-control"></textarea></div></div>
-          <div class="row">
-            <div class="form-group col-md-6"><label class="control-label">Attended interview at PSGCAS before? <span class="required">*</span></label><select name="already_attended" class="form-select form-select-sm" required><option value="">---------</option><option>Yes</option><option>No</option></select></div>
-            <div class="form-group col-md-6"><label class="control-label">How did you know about this vacancy? <span class="required">*</span></label><select name="huk" class="form-select form-select-sm" required><option value="">---------</option><option>Newspaper</option><option>Website</option><option>Social Media</option><option>Friends</option><option>Others</option></select></div>
-          </div>
-          <div class="row"><div class="form-group col-md-12"><label class="control-label">Any other comments</label><textarea name="comments" rows="3" class="form-control"></textarea></div></div>
-          <div class="row"><div class="form-group col-md-12"><label class="control-label">Upload Resume <span class="required">*</span></label><input type="file" name="resume" class="form-control form-control-sm" required></div></div>
-          <hr class="hr">
-        </section>
-
-        <!-- ── Declaration ── -->
-        <section>
-          <div class="row"><h5 class="card-title-menu">Declaration</h5></div>
-          <div class="form-check" style="align-items:flex-start;gap:.5rem;">
+          <div class="row"><h5 class="card-title-menu">Documents & Declaration</h5></div>
+          <div class="row"><div class="form-group col-md-12"><label class="control-label">Upload Resume (PDF/DOC, max 5 MB) <span class="required">*</span></label><input type="file" name="resume" accept=".pdf,.doc,.docx" class="form-control form-control-sm"></div></div>
+          <div class="form-check" style="align-items:flex-start;gap:.5rem;margin-top:1rem;">
             <input type="checkbox" name="tac" class="form-check-input" required id="id_tac" style="margin-top:3px;flex-shrink:0;">
             <label class="form-check-label" for="id_tac">I hereby declare that the information furnished herein above is correct and true to the best of my knowledge.</label>
           </div>
           <hr class="hr">
         </section>
 
-        <!-- Submit -->
-        <div style="display:flex;justify-content:center;gap:1rem;margin-top:1rem;">
-          <button class="btn btn-danger" type="reset">Reset</button>
-          <button class="btn btn-primary" type="submit" id="submit-btn">Submit Application</button>
+        <!-- Submit Buttons -->
+        <div style="display:flex;justify-content:center;gap:1rem;margin-top:1rem;" id="action-btn-group">
+          <button class="btn btn-secondary" type="button" id="draft-btn">💾 Save Draft</button>
+          <button class="btn btn-primary" type="submit" id="submit-btn">🚀 Submit Application (Final)</button>
         </div>
       </div>
     </div>
   </form>
 </div>
 
-<!-- SUCCESS OVERLAY WITH OFFICIAL REFERENCE ID -->
+<!-- SUCCESS OVERLAY -->
 <div class="success-overlay" id="success-overlay">
   <div class="success-box">
     <div class="success-icon">&#10003;</div>
     <h2>Application Submitted!</h2>
-    <p>Thank you for applying to <strong>PSG College of Arts &amp; Science</strong>. Your application has been successfully recorded.</p>
-
-    <!-- Prominent Reference ID Card -->
+    <p>Your application has been recorded and locked.</p>
     <div class="ref-card">
-      <div class="ref-label">Your Application Reference Number</div>
-      <div class="ref-code" id="success-ref-code">PSG-2026-XXXXXX</div>
-      <button type="button" class="btn-copy" id="btn-copy-ref" onclick="copyRefId()">
-        <span id="copy-text">📋 Copy Reference ID</span>
-      </button>
+      <div class="ref-label">Application Reference Number</div>
+      <div class="ref-code" id="success-ref-code">CS/001</div>
     </div>
-
-    <!-- Summary Details -->
-    <div class="ack-details">
-      <div class="ack-row"><span>Applicant Name:</span><strong id="ack-name">—</strong></div>
-      <div class="ack-row"><span>Position Applied:</span><strong id="ack-position">—</strong></div>
-      <div class="ack-row"><span>Department:</span><strong id="ack-dept">—</strong></div>
-      <div class="ack-row"><span>Date &amp; Time:</span><strong id="ack-date">—</strong></div>
-    </div>
-
-    <div class="ack-notice">
-      ⚠️ <strong>Important:</strong> Please write down or screenshot this Reference Number. You will need it for interview tracking and all future correspondence with PSGCAS.
-    </div>
-
-    <div style="display:flex;gap:.75rem;justify-content:center;margin-top:1.25rem;">
-      <button type="button" class="btn-print" onclick="window.print()">🖨️ Print Slip</button>
-      <button type="button" class="btn-ok" id="success-ok">Back to Careers</button>
-    </div>
+    <button type="button" class="btn btn-primary" onclick="window.location.href='candidate.html'">Go to Candidate Portal</button>
   </div>
 </div>
 
 <script>
-  // ── Position: hide research for Teaching Assistant
-  document.getElementById('id_position').addEventListener('change', function () {
-    document.getElementById('research-section').style.display = this.value === 'Teaching Assistant' ? 'none' : '';
-  });
+  var token = sessionStorage.getItem('psg_token');
+  var userRole = sessionStorage.getItem('psg_role');
+  var currentAppId = null;
+  var isLocked = false;
 
-  // ── DOB age validation
-  document.getElementById('id_dob').addEventListener('change', function () {
-    var dob = new Date(this.value), today = new Date();
-    var age = today.getFullYear() - dob.getFullYear();
-    var m = today.getMonth() - dob.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
-    var err = document.getElementById('dob_error');
-    if (age < 18) { err.textContent = 'Age must be at least 18 years'; err.style.display = 'block'; this.classList.add('is-invalid'); }
-    else { err.textContent = ''; err.style.display = 'none'; this.classList.remove('is-invalid'); }
-  });
-
-  // ── Copy address
-  document.getElementById('copy-address').addEventListener('change', function () {
-    if (this.checked) {
-      document.getElementById('localAddr').value    = document.getElementById('permAddr').value;
-      document.getElementById('localCity').value    = document.getElementById('permCity').value;
-      document.getElementById('localState').value   = document.getElementById('permState').value;
-      document.getElementById('localCountry').value = document.getElementById('permCountry').value;
-      document.getElementById('localPin').value     = document.getElementById('permPin').value;
-    }
-  });
-
-  // ── Dynamic row builders
-  var langIdx = 0, eduIdx = 0;
-
-  function addLangRow() {
-    langIdx++;
-    const c = document.getElementById('language-container');
-    const d = document.createElement('div');
-    d.className = 'dyn-row row';
-    d.innerHTML = `
-      <div class="form-group col-md-3"><label class="control-label">Language</label><input type="text" class="form-control lang-name" placeholder="e.g. Tamil"></div>
-      <div class="form-group col-md-2" style="display:flex;align-items:center;gap:.3rem;margin-top:1.5rem;"><input type="checkbox" class="form-check-input lang-speak"><label class="form-check-label">Speak</label></div>
-      <div class="form-group col-md-2" style="display:flex;align-items:center;gap:.3rem;margin-top:1.5rem;"><input type="checkbox" class="form-check-input lang-read"><label class="form-check-label">Read</label></div>
-      <div class="form-group col-md-2" style="display:flex;align-items:center;gap:.3rem;margin-top:1.5rem;"><input type="checkbox" class="form-check-input lang-write"><label class="form-check-label">Write</label></div>
-      <div class="form-group col-md-3" style="margin-top:1.5rem;"><button type="button" class="btn btn-danger" onclick="this.closest('.dyn-row').remove()">Remove</button></div>`;
-    c.appendChild(d);
+  // Ensure candidate login
+  if (!token || userRole !== 'candidate') {
+    window.location.href = 'login.html';
   }
 
-  function addEduRow() {
-    const c = document.getElementById('edu-container');
+  // ── 1. DYNAMIC ROW BUILDERS ──
+
+  // 1a. Publication Row
+  function addPubRow(data) {
+    data = data || {};
+    const c = document.getElementById('pub-container');
     const d = document.createElement('div');
-    d.className = 'dyn-row edu-item';
+    d.className = 'dyn-row pub-item';
+    if (data.id) d.dataset.id = data.id;
+
     d.innerHTML = `
       <div class="row">
-        <div class="form-group col-md-2"><label class="control-label">Qualification <span class="required">*</span></label>
-          <select class="form-select form-select-sm edu-qual" required><option value="">---</option><option>10th</option><option>12th</option><option>UG</option><option>PG</option><option>MPhil</option><option>PhD</option><option>Certificate Course</option></select></div>
-        <div class="form-group col-md-2"><label class="control-label">Degree <span class="required">*</span></label><input type="text" class="form-control edu-degree" required placeholder="e.g. B.Sc."></div>
-        <div class="form-group col-md-3"><label class="control-label">Specialization <span class="required">*</span></label><input type="text" class="form-control edu-spec" required></div>
-        <div class="form-group col-md-2"><label class="control-label">Percentage <span class="required">*</span></label><input type="text" class="form-control edu-pct" required></div>
-        <div class="form-group col-md-2"><label class="control-label">Year <span class="required">*</span></label><input type="text" class="form-control edu-year" required></div>
-        <div class="form-group col-md-1 align-self-center" style="margin-top:1.5rem;"><button type="button" class="btn btn-danger" onclick="this.closest('.edu-item').remove()">✕</button></div>
+        <div class="form-group col-md-3"><label class="control-label">Publication Type <span class="required">*</span></label>
+          <select class="form-select form-select-sm pub-type" required onchange="toggleIndexing(this)">
+            <option value="">---</option>
+            <option ${data.type==='Journal article'?'selected':''}>Journal article</option>
+            <option ${data.type==='Book'?'selected':''}>Book</option>
+            <option ${data.type==='Book chapter'?'selected':''}>Book chapter</option>
+          </select>
+        </div>
+        <div class="form-group col-md-3"><label class="control-label">Scope <span class="required">*</span></label>
+          <select class="form-select form-select-sm pub-scope" required>
+            <option value="">---</option>
+            <option ${data.scope==='National'?'selected':''}>National</option>
+            <option ${data.scope==='International'?'selected':''}>International</option>
+          </select>
+        </div>
+        <div class="form-group col-md-3 pub-idx-wrap" style="display:${data.type==='Journal article'||!data.type?'block':'none'};">
+          <label class="control-label">Indexing Category <span class="required">*</span></label>
+          <select class="form-select form-select-sm pub-idx">
+            <option value="">---</option>
+            <option ${data.indexing_category==='SCI'?'selected':''}>SCI</option>
+            <option ${data.indexing_category==='Scopus'?'selected':''}>Scopus</option>
+            <option ${data.indexing_category==='UGC-listed'?'selected':''}>UGC-listed</option>
+            <option ${data.indexing_category==='Other'?'selected':''}>Other</option>
+          </select>
+        </div>
+        <div class="form-group col-md-3"><label class="control-label">Year (1950-2030)</label>
+          <input type="number" class="form-control pub-year" min="1950" max="2030" value="${data.year||''}">
+        </div>
       </div>
       <div class="row">
-        <div class="form-group col-md-3"><label class="control-label">School/College <span class="required">*</span></label><input type="text" class="form-control edu-college" required></div>
-        <div class="form-group col-md-3"><label class="control-label">University</label><input type="text" class="form-control edu-univ"></div>
-        <div class="form-group col-md-3"><label class="control-label">Regular/Correspondence <span class="required">*</span></label><select class="form-select form-select-sm edu-rc" required><option value="">---</option><option>Regular</option><option>Correspondance</option></select></div>
-        <div class="form-group col-md-3"><label class="control-label">Part/Full Time <span class="required">*</span></label><select class="form-select form-select-sm edu-pf" required><option value="">---</option><option>Part-Time</option><option>Full-Time</option></select></div>
+        <div class="form-group col-md-5"><label class="control-label">Title <span class="required">*</span></label><input type="text" class="form-control pub-title" required value="${data.title||''}"></div>
+        <div class="form-group col-md-4"><label class="control-label">Journal / Publisher</label><input type="text" class="form-control pub-pub" value="${data.publisher_journal||''}"></div>
+        <div class="form-group col-md-3"><label class="control-label">ISBN / ISSN</label><input type="text" class="form-control pub-isbn" value="${data.isbn_issn||''}"></div>
+      </div>
+      <div class="row">
+        <div class="form-group col-md-5"><label class="control-label">DOI / Link</label><input type="text" class="form-control pub-doi" value="${data.doi_link||''}"></div>
+        <div class="form-group col-md-5"><label class="control-label">Additional Details</label><input type="text" class="form-control pub-extra" value="${data.additional_details||''}"></div>
+        <div class="form-group col-md-2 align-self-center" style="margin-top:1.5rem;">
+          <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.pub-item').remove()">Remove</button>
+        </div>
       </div>`;
     c.appendChild(d);
   }
 
-  function addExpRow(containerId, prefix) {
-    const c = document.getElementById(containerId);
+  function toggleIndexing(sel) {
+    const wrap = sel.closest('.pub-item').querySelector('.pub-idx-wrap');
+    if (sel.value === 'Journal article') {
+      wrap.style.display = 'block';
+      wrap.querySelector('select').setAttribute('required', 'required');
+    } else {
+      wrap.style.display = 'none';
+      wrap.querySelector('select').removeAttribute('required');
+    }
+  }
+
+  // 1b. Patent Row
+  function addPatRow(data) {
+    data = data || {};
+    const c = document.getElementById('pat-container');
     const d = document.createElement('div');
-    d.className = 'dyn-row row exp-item';
+    d.className = 'dyn-row pat-item';
+    if (data.id) d.dataset.id = data.id;
+
     d.innerHTML = `
-      <div class="form-group col-md-2"><label class="control-label">Designation <span class="required">*</span></label><input type="text" class="${prefix}-desg form-control" required></div>
-      <div class="form-group col-md-2"><label class="control-label">Institution <span class="required">*</span></label><input type="text" class="${prefix}-inst form-control" required></div>
-      <div class="form-group col-md-2"><label class="control-label">Address</label><textarea rows="2" class="${prefix}-addr form-control"></textarea></div>
-      <div class="form-group col-md-2"><label class="control-label">Certificate</label><select class="${prefix}-cert form-select form-select-sm"><option value="">---</option><option>Yes</option><option>No</option><option>Currently Working</option></select></div>
-      <div class="form-group col-md-1"><label class="control-label">From</label><input type="date" class="${prefix}-from form-control"></div>
-      <div class="form-group col-md-1"><label class="control-label">To</label><input type="date" class="${prefix}-to form-control"></div>
-      <div class="form-group col-md-2 align-self-center" style="margin-top:1.5rem;"><button type="button" class="btn btn-danger" onclick="this.closest('.exp-item').remove()">Remove</button></div>`;
+      <div class="row">
+        <div class="form-group col-md-4"><label class="control-label">Patent Title <span class="required">*</span></label><input type="text" class="form-control pat-title" required value="${data.title||''}"></div>
+        <div class="form-group col-md-2"><label class="control-label">Status <span class="required">*</span></label>
+          <select class="form-select form-select-sm pat-status" required>
+            <option value="">---</option>
+            <option ${data.status==='Published'?'selected':''}>Published</option>
+            <option ${data.status==='Granted'?'selected':''}>Granted</option>
+          </select>
+        </div>
+        <div class="form-group col-md-3"><label class="control-label">Patent Number</label><input type="text" class="form-control pat-num" value="${data.patent_number||''}"></div>
+        <div class="form-group col-md-2"><label class="control-label">Year (1950-2030)</label><input type="number" class="form-control pat-year" min="1950" max="2030" value="${data.year||''}"></div>
+        <div class="form-group col-md-1 align-self-center" style="margin-top:1.5rem;">
+          <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.pat-item').remove()">✕</button>
+        </div>
+      </div>`;
     c.appendChild(d);
   }
 
-  function addProjectRow() {
-    const c = document.getElementById('projects-container');
+  // 1c. Consultancy Row
+  function addConRow(data) {
+    data = data || {};
+    const c = document.getElementById('con-container');
     const d = document.createElement('div');
-    d.className = 'dyn-row row proj-item';
+    d.className = 'dyn-row con-item';
+    if (data.id) d.dataset.id = data.id;
+
     d.innerHTML = `
-      <div class="form-group col-md-2"><label class="control-label">PI/CO-PI</label><input type="text" class="proj-pi form-control"></div>
-      <div class="form-group col-md-2"><label class="control-label">Title</label><input type="text" class="proj-title form-control"></div>
-      <div class="form-group col-md-2"><label class="control-label">Funding Agency</label><input type="text" class="proj-fund form-control"></div>
-      <div class="form-group col-md-2"><label class="control-label">Status</label><select class="proj-status form-select form-select-sm"><option value="">---</option><option>Ongoing</option><option>Completed</option></select></div>
-      <div class="form-group col-md-2"><label class="control-label">Duration</label><input type="text" class="proj-dur form-control" placeholder="YYYY - YYYY"></div>
-      <div class="form-group col-md-2 align-self-center" style="margin-top:1.5rem;"><button type="button" class="btn btn-danger" onclick="this.closest('.proj-item').remove()">Remove</button></div>`;
+      <div class="row">
+        <div class="form-group col-md-3"><label class="control-label">Client / Organisation <span class="required">*</span></label><input type="text" class="form-control con-client" required value="${data.client_organisation||''}"></div>
+        <div class="form-group col-md-4"><label class="control-label">Project Title <span class="required">*</span></label><input type="text" class="form-control con-title" required value="${data.title||''}"></div>
+        <div class="form-group col-md-2"><label class="control-label">Year</label><input type="number" class="form-control con-year" min="1950" max="2030" value="${data.year||''}"></div>
+        <div class="form-group col-md-2"><label class="control-label">Amount (₹)</label><input type="number" class="form-control con-amt" min="0" value="${data.amount||''}"></div>
+        <div class="form-group col-md-1 align-self-center" style="margin-top:1.5rem;">
+          <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.con-item').remove()">✕</button>
+        </div>
+      </div>`;
     c.appendChild(d);
   }
 
-  function addPatentRow() {
-    const c = document.getElementById('patents-container');
+  // 1d. Project Row
+  function addPrjRow(data) {
+    data = data || {};
+    const c = document.getElementById('prj-container');
     const d = document.createElement('div');
-    d.className = 'dyn-row row pat-item';
+    d.className = 'dyn-row prj-item';
+    if (data.id) d.dataset.id = data.id;
+
     d.innerHTML = `
-      <div class="form-group col-md-4"><label class="control-label">Authors (In Order)</label><input type="text" class="pat-authors form-control"></div>
-      <div class="form-group col-md-4"><label class="control-label">Title with ID</label><input type="text" class="pat-title form-control"></div>
-      <div class="form-group col-md-2"><label class="control-label">Status</label><select class="pat-status form-select form-select-sm"><option value="">---</option><option>Applied</option><option>Published</option><option>Granted</option></select></div>
-      <div class="form-group col-md-2 align-self-center" style="margin-top:1.5rem;"><button type="button" class="btn btn-danger" onclick="this.closest('.pat-item').remove()">Remove</button></div>`;
+      <div class="row">
+        <div class="form-group col-md-4"><label class="control-label">Project Title <span class="required">*</span></label><input type="text" class="form-control prj-title" required value="${data.title||''}"></div>
+        <div class="form-group col-md-3"><label class="control-label">Funding Agency <span class="required">*</span></label><input type="text" class="form-control prj-agency" required value="${data.funding_agency||''}"></div>
+        <div class="form-group col-md-2"><label class="control-label">Type <span class="required">*</span></label>
+          <select class="form-select form-select-sm prj-type" required>
+            <option value="">---</option>
+            <option ${data.type==='Major'?'selected':''}>Major</option>
+            <option ${data.type==='Minor'?'selected':''}>Minor</option>
+          </select>
+        </div>
+        <div class="form-group col-md-2"><label class="control-label">Role</label>
+          <select class="form-select form-select-sm prj-role">
+            <option value="">---</option>
+            <option ${data.role==='PI'?'selected':''}>PI</option>
+            <option ${data.role==='Co-PI'?'selected':''}>Co-PI</option>
+            <option ${data.role==='Member'?'selected':''}>Member</option>
+          </select>
+        </div>
+        <div class="form-group col-md-1 align-self-center" style="margin-top:1.5rem;">
+          <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.prj-item').remove()">✕</button>
+        </div>
+      </div>`;
     c.appendChild(d);
   }
 
-  function addPdfRow() {
-    const c = document.getElementById('pdf-container');
+  // 1e. Admin Position Row
+  function addAdminRow(data) {
+    data = data || {};
+    const c = document.getElementById('admin-container');
     const d = document.createElement('div');
-    d.className = 'dyn-row row pdf-item';
+    d.className = 'dyn-row admin-pos-item';
     d.innerHTML = `
-      <div class="form-group col-md-5"><label class="control-label">National / International</label><select class="pdf-status form-select form-select-sm"><option value="">---</option><option>National</option><option>International</option></select></div>
-      <div class="form-group col-md-5"><label class="control-label">Institute, Country</label><input type="text" class="pdf-name form-control"></div>
-      <div class="form-group col-md-2 align-self-center" style="margin-top:1.5rem;"><button type="button" class="btn btn-danger" onclick="this.closest('.pdf-item').remove()">Remove</button></div>`;
+      <div class="row">
+        <div class="form-group col-md-4"><label class="control-label">Position Title</label><input type="text" class="form-control admin-pos-title" placeholder="e.g. HOD / Warden" value="${data.position||''}"></div>
+        <div class="form-group col-md-5"><label class="control-label">Institution / Department</label><input type="text" class="form-control admin-pos-inst" value="${data.institution||''}"></div>
+        <div class="form-group col-md-2"><label class="control-label">Duration</label><input type="text" class="form-control admin-pos-dur" placeholder="2020-2022" value="${data.duration||''}"></div>
+        <div class="form-group col-md-1 align-self-center" style="margin-top:1.5rem;">
+          <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.admin-pos-item').remove()">✕</button>
+        </div>
+      </div>`;
     c.appendChild(d);
   }
 
-  // Attach listeners
-  document.getElementById('add-lang').addEventListener('click', addLangRow);
-  document.getElementById('add-edu').addEventListener('click', addEduRow);
-  document.getElementById('add-teaching').addEventListener('click', () => addExpRow('teaching-container', 'teach'));
-  document.getElementById('add-industry').addEventListener('click', () => addExpRow('industry-container', 'indus'));
-  document.getElementById('add-project').addEventListener('click', addProjectRow);
-  document.getElementById('add-patent').addEventListener('click', addPatentRow);
-  document.getElementById('add-pdf').addEventListener('click', addPdfRow);
+  // Listeners
+  document.getElementById('add-pub').addEventListener('click', () => addPubRow());
+  document.getElementById('add-pat').addEventListener('click', () => addPatRow());
+  document.getElementById('add-con').addEventListener('click', () => addConRow());
+  document.getElementById('add-prj').addEventListener('click', () => addPrjRow());
+  document.getElementById('add-admin-pos').addEventListener('click', () => addAdminRow());
 
-  // Start with one row each
-  addLangRow();
-  addEduRow();
+  // Load departments
+  (async function() {
+    try {
+      const res = await fetch('/api/departments', { headers: { 'Authorization': 'Bearer ' + token } });
+      const data = await res.json();
+      const sel = document.getElementById('id_department');
+      sel.innerHTML = '<option value="">---------</option>';
+      (data.departments || []).forEach(d => {
+        const o = document.createElement('option'); o.value = d; o.textContent = d; sel.appendChild(o);
+      });
+    } catch(e) {}
+  })();
 
-  // ── Collect JSON sub-tables from DOM
-  function collectLanguages() {
-    return Array.from(document.querySelectorAll('#language-container .dyn-row')).map(r => ({
-      language: r.querySelector('.lang-name')?.value || '',
-      speak: r.querySelector('.lang-speak')?.checked || false,
-      read:  r.querySelector('.lang-read')?.checked  || false,
-      write: r.querySelector('.lang-write')?.checked || false,
-    }));
+  // ── 2. LOAD EXISTING DRAFT DATA ON OPEN ──
+  async function loadExistingDraft() {
+    try {
+      const res = await fetch('/api/my-application', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (!res.ok) return;
+      const app = await res.json();
+      if (!app || !app.id) return;
+
+      currentAppId = app.id;
+      isLocked = !!app.is_locked;
+
+      // Populate basic fields
+      const f = document.getElementById('apply-form');
+      if (app.position) f.position.value = app.position;
+      if (app.department) f.department.value = app.department;
+      if (app.name) f.name.value = app.name;
+      if (app.dob) f.dob.value = app.dob;
+      if (app.gender) f.gender.value = app.gender;
+      if (app.mother_tongue) f.mother_tongue.value = app.mother_tongue;
+      if (app.religion) f.religion.value = app.religion;
+      if (app.community) f.community.value = app.community;
+      if (app.category) f.category.value = app.category;
+      if (app.father_name) f.father_name.value = app.father_name;
+      if (app.mobile_no) f.mobile_no.value = app.mobile_no;
+      if (app.email) f.email.value = app.email;
+
+      // Fetch research data
+      const rRes = await fetch('/api/applications/' + app.id + '/research', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (rRes.ok) {
+        const rData = await rRes.json();
+
+        // Clear default containers
+        document.getElementById('pub-container').innerHTML = '';
+        document.getElementById('pat-container').innerHTML = '';
+        document.getElementById('con-container').innerHTML = '';
+        document.getElementById('prj-container').innerHTML = '';
+        document.getElementById('admin-container').innerHTML = '';
+
+        (rData.publications || []).forEach(p => addPubRow(p));
+        (rData.patents || []).forEach(p => addPatRow(p));
+        (rData.consultancy || []).forEach(c => addConRow(c));
+        (rData.projects || []).forEach(pr => addPrjRow(pr));
+        (rData.admin_positions || []).forEach(a => addAdminRow(a));
+
+        if (rData.iso_involvement) document.getElementById('id_iso').checked = true;
+        if (rData.iso_details) f.iso_details.value = rData.iso_details;
+        if (rData.naac_iqac_details) f.naac_iqac_details.value = rData.naac_iqac_details;
+      }
+
+      // Lock UI if submitted
+      if (isLocked) {
+        document.getElementById('lock-banner').style.display = 'block';
+        Array.from(f.elements).forEach(el => el.disabled = true);
+        document.getElementById('action-btn-group').style.display = 'none';
+      }
+
+    } catch(e) { console.error(e); }
   }
 
-  function collectEducation() {
-    return Array.from(document.querySelectorAll('.edu-item')).map(r => ({
-      qualification: r.querySelector('.edu-qual')?.value  || '',
-      degree:        r.querySelector('.edu-degree')?.value || '',
-      specialization:r.querySelector('.edu-spec')?.value  || '',
-      percentage:    r.querySelector('.edu-pct')?.value   || '',
-      year:          r.querySelector('.edu-year')?.value  || '',
-      college:       r.querySelector('.edu-college')?.value || '',
-      university:    r.querySelector('.edu-univ')?.value   || '',
-      rc:            r.querySelector('.edu-rc')?.value     || '',
-      pf:            r.querySelector('.edu-pf')?.value     || '',
+  loadExistingDraft();
+
+  // ── 3. COLLECT FORM DATA ──
+  function collectResearch() {
+    const pubs = Array.from(document.querySelectorAll('.pub-item')).map(r => ({
+      id: r.dataset.id ? parseInt(r.dataset.id) : null,
+      type: r.querySelector('.pub-type')?.value,
+      scope: r.querySelector('.pub-scope')?.value,
+      indexing_category: r.querySelector('.pub-idx')?.value || null,
+      title: r.querySelector('.pub-title')?.value,
+      publisher_journal: r.querySelector('.pub-pub')?.value,
+      isbn_issn: r.querySelector('.pub-isbn')?.value,
+      year: r.querySelector('.pub-year')?.value,
+      doi_link: r.querySelector('.pub-doi')?.value,
+      additional_details: r.querySelector('.pub-extra')?.value,
     }));
+
+    const pats = Array.from(document.querySelectorAll('.pat-item')).map(r => ({
+      id: r.dataset.id ? parseInt(r.dataset.id) : null,
+      title: r.querySelector('.pat-title')?.value,
+      status: r.querySelector('.pat-status')?.value,
+      patent_number: r.querySelector('.pat-num')?.value,
+      year: r.querySelector('.pat-year')?.value,
+    }));
+
+    const cons = Array.from(document.querySelectorAll('.con-item')).map(r => ({
+      id: r.dataset.id ? parseInt(r.dataset.id) : null,
+      client_organisation: r.querySelector('.con-client')?.value,
+      title: r.querySelector('.con-title')?.value,
+      year: r.querySelector('.con-year')?.value,
+      amount: r.querySelector('.con-amt')?.value,
+    }));
+
+    const prjs = Array.from(document.querySelectorAll('.prj-item')).map(r => ({
+      id: r.dataset.id ? parseInt(r.dataset.id) : null,
+      title: r.querySelector('.prj-title')?.value,
+      funding_agency: r.querySelector('.prj-agency')?.value,
+      type: r.querySelector('.prj-type')?.value,
+      role: r.querySelector('.prj-role')?.value,
+    }));
+
+    const adminPos = Array.from(document.querySelectorAll('.admin-pos-item')).map(r => ({
+      position: r.querySelector('.admin-pos-title')?.value,
+      institution: r.querySelector('.admin-pos-inst')?.value,
+      duration: r.querySelector('.admin-pos-dur')?.value,
+    }));
+
+    return {
+      publications: pubs,
+      patents: pats,
+      consultancy: cons,
+      projects: prjs,
+      iso_involvement: document.getElementById('id_iso').checked,
+      iso_details: document.querySelector('input[name="iso_details"]').value,
+      naac_iqac_details: document.querySelector('textarea[name="naac_iqac_details"]').value,
+      admin_positions: adminPos,
+    };
   }
 
-  function collectExp(prefix, cls) {
-    return Array.from(document.querySelectorAll(cls)).map(r => ({
-      designation: r.querySelector(`.${prefix}-desg`)?.value || '',
-      institution: r.querySelector(`.${prefix}-inst`)?.value || '',
-      address:     r.querySelector(`.${prefix}-addr`)?.value || '',
-      certificate: r.querySelector(`.${prefix}-cert`)?.value || '',
-      from:        r.querySelector(`.${prefix}-from`)?.value || '',
-      to:          r.querySelector(`.${prefix}-to`)?.value   || '',
-    }));
-  }
-
-  function collectProjects() {
-    return Array.from(document.querySelectorAll('.proj-item')).map(r => ({
-      pi: r.querySelector('.proj-pi')?.value || '', title: r.querySelector('.proj-title')?.value || '',
-      funding: r.querySelector('.proj-fund')?.value || '', status: r.querySelector('.proj-status')?.value || '',
-      duration: r.querySelector('.proj-dur')?.value || '',
-    }));
-  }
-
-  function collectPatents() {
-    return Array.from(document.querySelectorAll('.pat-item')).map(r => ({
-      authors: r.querySelector('.pat-authors')?.value || '', title: r.querySelector('.pat-title')?.value || '',
-      status: r.querySelector('.pat-status')?.value || '',
-    }));
-  }
-
-  function collectPdf() {
-    return Array.from(document.querySelectorAll('.pdf-item')).map(r => ({
-      status: r.querySelector('.pdf-status')?.value || '', name: r.querySelector('.pdf-name')?.value || '',
-    }));
-  }
-
-  // ── FORM SUBMIT → POST to /api/apply
-  document.getElementById('apply-form').addEventListener('submit', async function (e) {
-    e.preventDefault();
-    const btn = document.getElementById('submit-btn');
+  // ── 4. SAVE DRAFT OR SUBMIT ──
+  async function saveApplication(isFinalSubmit) {
+    if (isLocked) { alert('Application is locked.'); return; }
     const errBanner = document.getElementById('form-error-banner');
     errBanner.style.display = 'none';
 
-    // 1. Browser HTML5 validity check
-    if (!this.checkValidity()) {
-      this.reportValidity();
+    const f = document.getElementById('apply-form');
+    if (isFinalSubmit && !f.checkValidity()) {
+      f.reportValidity();
       return;
     }
 
-    // 2. Validate mandatory position and department
-    const pos = document.getElementById('id_position').value.trim();
-    const dept = document.getElementById('id_department').value.trim();
-    if (!pos || !dept) {
-      errBanner.textContent = 'Please select both the Position and Department you are applying for.';
-      errBanner.style.display = 'block';
-      errBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
+    const researchData = collectResearch();
+
+    // Year validation
+    for (let p of researchData.publications) {
+      if (p.year && (p.year < 1950 || p.year > 2030)) {
+        errBanner.textContent = 'Publication year must be between 1950 and 2030.';
+        errBanner.style.display = 'block';
+        return;
+      }
     }
 
-    // 3. Validate at least one education entry
-    const eduRows = document.querySelectorAll('.edu-item');
-    let hasEdu = false;
-    eduRows.forEach(r => {
-      const q = r.querySelector('.edu-qual')?.value.trim();
-      const deg = r.querySelector('.edu-degree')?.value.trim();
-      if (q && deg) hasEdu = true;
-    });
-    if (!hasEdu) {
-      errBanner.textContent = 'Please enter at least one Education qualification (e.g. 10th, 12th, UG, PG).';
-      errBanner.style.display = 'block';
-      errBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
-
-    // 4. Validate resume is attached
-    const resumeInput = document.querySelector('input[name="resume"]');
-    if (!resumeInput || !resumeInput.files || resumeInput.files.length === 0) {
-      errBanner.textContent = 'Resume upload is required. Please attach your CV/Resume file.';
-      errBanner.style.display = 'block';
-      resumeInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
-
-    // 5. Declaration check
-    if (!document.getElementById('id_tac').checked) {
-      errBanner.textContent = 'Please check the declaration box before submitting.';
-      errBanner.style.display = 'block';
-      return;
-    }
-
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Submitting Application…';
-
-    // Build FormData (handles files natively)
-    const fd = new FormData(this);
-
-    // Append JSON sub-tables as hidden form fields
-    fd.append('languages_json',  JSON.stringify(collectLanguages()));
-    fd.append('education_json',  JSON.stringify(collectEducation()));
-    fd.append('teaching_json',   JSON.stringify(collectExp('teach', '.exp-item')));
-    fd.append('industry_json',   JSON.stringify(collectExp('indus', '#industry-container .exp-item')));
-    fd.append('projects_json',   JSON.stringify(collectProjects()));
-    fd.append('patents_json',    JSON.stringify(collectPatents()));
-    fd.append('pdf_json',        JSON.stringify(collectPdf()));
+    const fd = new FormData(f);
+    fd.append('is_submitted', isFinalSubmit ? 'true' : 'false');
 
     try {
-      const res  = await fetch('/api/apply', { method: 'POST', body: fd });
+      // Step A: Save main application
+      const res = await fetch('/api/my-application', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: fd
+      });
       const data = await res.json();
-
       if (!res.ok) {
-        errBanner.textContent  = data.error || 'Submission failed. Please check the form and try again.';
+        errBanner.textContent = data.error || 'Failed to save application.';
         errBanner.style.display = 'block';
-        errBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        btn.disabled = false;
-        btn.textContent = 'Submit Application';
         return;
       }
 
-      // Populate Acknowledgement Card
-      const refId = data.app_uuid || 'PSG-2026-REC';
-      document.getElementById('success-ref-code').textContent = refId;
-      document.getElementById('ack-name').textContent = data.name || document.querySelector('input[name="name"]')?.value || 'Applicant';
-      document.getElementById('ack-position').textContent = data.position || pos;
-      document.getElementById('ack-dept').textContent = data.department || dept;
-      document.getElementById('ack-date').textContent = data.date || new Date().toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+      currentAppId = data.application_id;
 
-      document.getElementById('success-overlay').classList.add('active');
+      // Step B: Save research child rows atomically
+      if (currentAppId) {
+        const rRes = await fetch('/api/applications/' + currentAppId + '/research', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify(researchData)
+        });
+        if (!rRes.ok) {
+          const rErr = await rRes.json();
+          errBanner.textContent = rErr.error || 'Failed to save research details.';
+          errBanner.style.display = 'block';
+          return;
+        }
+      }
 
-    } catch (err) {
-      errBanner.textContent  = 'Could not connect to the server. Please check your connection and try again.';
+      if (isFinalSubmit) {
+        document.getElementById('success-ref-code').textContent = data.app_number || data.app_uuid || 'CS/001';
+        document.getElementById('success-overlay').classList.add('active');
+      } else {
+        alert('Draft saved successfully!');
+        window.location.reload();
+      }
+
+    } catch(e) {
+      errBanner.textContent = 'Network error while saving.';
       errBanner.style.display = 'block';
-      errBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      btn.disabled = false;
-      btn.textContent = 'Submit Application';
     }
-  });
-
-  // Copy Reference ID
-  function copyRefId() {
-    const code = document.getElementById('success-ref-code').textContent;
-    navigator.clipboard.writeText(code).then(() => {
-      const btn = document.getElementById('copy-text');
-      btn.textContent = '✓ Copied to Clipboard!';
-      setTimeout(() => { btn.textContent = '📋 Copy Reference ID'; }, 2500);
-    }).catch(() => {
-      prompt('Your Reference ID:', code);
-    });
   }
 
-  document.getElementById('success-ok').addEventListener('click', () => {
-    window.location.href = 'index.html';
-  });
+  document.getElementById('draft-btn').addEventListener('click', () => saveApplication(false));
+  document.getElementById('apply-form').addEventListener('submit', (e) => { e.preventDefault(); saveApplication(true); });
 </script>
 </body>
 </html>

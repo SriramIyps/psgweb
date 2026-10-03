@@ -1,288 +1,179 @@
 """
-PSG CAS Careers Portal - Flask Backend
-Run: python app.py
+PSG CAS CONNECT — Flask Backend (RBAC Edition)
+Roles: candidate, hod, superadmin (VP), hr, admin
+Auth:  Supabase Auth  |  Data: Supabase Postgres + RLS
+Run:   python app.py
 """
 import os
-import sqlite3
 import uuid
-import hashlib
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from functools import wraps
 
 from flask import Flask, request, jsonify, send_from_directory, g
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
-import jwt
+
+# Load .env in development
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+from supabase import create_client
+
+IST = ZoneInfo("Asia/Kolkata")
 
 # ─────────────────────────────────────────────
-# CONFIG
+# CONFIG (all from environment — no hardcoded secrets)
 # ─────────────────────────────────────────────
-BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
-DB_PATH     = os.path.join(BASE_DIR, "database", "psgcas.db")
-UPLOAD_DIR  = os.path.join(BASE_DIR, "uploads")
-SECRET_KEY  = "psgcas_super_secret_key_2024"          # Change in production
-TOKEN_EXP   = timedelta(hours=8)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 MAX_FILE_MB = 10
 
-ALLOWED_PHOTO  = {"png", "jpg", "jpeg", "gif", "webp"}
-ALLOWED_DOC    = {"pdf", "doc", "docx"}
-ALLOWED_SHEET  = {"csv", "xls", "xlsx"}
+# SQLite Safety Guard: Refuse to run on Render production with SQLite enabled
+if os.environ.get("USE_SQLITE") == "1":
+    if os.environ.get("RENDER"):
+        raise RuntimeError("SQLite is strictly forbidden on Render production environment!")
+    print("[WARN] USE_SQLITE=1 set explicitly for local development.")
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+
+if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+    print("[WARN] SUPABASE_URL or SUPABASE_ANON_KEY not set. Auth will not work.")
+
+ALLOWED_PHOTO = {"png", "jpg", "jpeg", "gif", "webp"}
+ALLOWED_DOC = {"pdf", "doc", "docx"}
+ALLOWED_SHEET = {"csv", "xls", "xlsx"}
 
 app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app, supports_credentials=True)
 app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_MB * 1024 * 1024
-# Supabase Cloud Database Configuration
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://wguboyrruvmgnxjxtufl.supabase.co").rstrip("/")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndndWJveXJydXZtZ254anh0dWZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4MzAxNjAsImV4cCI6MjEwNjQwNjE2MH0.1WoC5BELtaBNqVpyctktV6adooKZ6m3t2I2K0gyFolo")
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(32).hex())
 
-def supabase_request(method, endpoint, body=None, params=None):
-    """Make a direct REST request to Supabase PostgREST API."""
-    import urllib.request
-    import urllib.parse
-    if not SUPABASE_URL or not SUPABASE_KEY:
+# ─────────────────────────────────────────────
+# SUPABASE CLIENTS
+# ─────────────────────────────────────────────
+# Anon client: used for public operations & user-scoped queries
+sb_anon = create_client(SUPABASE_URL, SUPABASE_ANON_KEY) if SUPABASE_URL and SUPABASE_ANON_KEY else None
+# Service-role client: used for admin operations (create users, bypass RLS)
+sb_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY) if SUPABASE_URL and SUPABASE_SERVICE_KEY else None
+
+@app.before_request
+def global_supabase_guard():
+    """Global guard: if Supabase client is unavailable, fail closed on all /api data routes."""
+    if request.path.startswith("/api/") and request.path not in ("/api/health", "/api/settings"):
+        if sb_admin is None:
+            return jsonify(error="Database connection unavailable. Service operating in fail-closed mode."), 503
+
+# ─────────────────────────────────────────────
+# INIT (ensure upload dirs exist)
+# ─────────────────────────────────────────────
+os.makedirs(os.path.join(UPLOAD_DIR, "photos"), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_DIR, "resumes"), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_DIR, "papers"), exist_ok=True)
+
+
+# ═════════════════════════════════════════════
+# AUDIT LOGGING HELPER
+# ═════════════════════════════════════════════
+
+def log_audit(who, action, application_id=None, old_value=None, new_value=None):
+    """Record administrative or critical state changes in audit_log table.
+    Fails closed: raises Exception if database insert fails so caller fails with 503.
+    """
+    if not sb_admin:
+        raise Exception("Database service unavailable for audit logging")
+
+    sb_admin.table("audit_log").insert({
+        "who": who,
+        "action": action,
+        "application_id": application_id,
+        "old_value": str(old_value) if old_value is not None else None,
+        "new_value": str(new_value) if new_value is not None else None,
+        "when_timestamp": datetime.now(IST).isoformat(),
+    }).execute()
+
+
+# ═════════════════════════════════════════════
+# AUTH MIDDLEWARE
+# ═════════════════════════════════════════════
+
+def _get_user_from_token():
+    """Verify the Supabase JWT and return profile data."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
         return None
+    token = auth_header.split(" ", 1)[1]
 
-    url = f"{SUPABASE_URL}/rest/v1/{endpoint.lstrip('/')}"
-    if params:
-        url += ("&" if "?" in url else "?") + urllib.parse.urlencode(params)
-
-    headers = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "return=representation"
-    }
-
-    data_bytes = json.dumps(body).encode("utf-8") if body is not None else None
-    req = urllib.request.Request(url, data=data_bytes, headers=headers, method=method.upper())
+    if not sb_admin:
+        return None
 
     try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            content = resp.read().decode("utf-8")
-            return json.loads(content) if content else []
+        # Verify token via Supabase
+        user_resp = sb_admin.auth.get_user(token)
+        user = user_resp.user
+        if not user:
+            return None
+
+        # Fetch profile (role, department)
+        profile_resp = (
+            sb_admin.table("profiles")
+            .select("role, department, full_name")
+            .eq("id", str(user.id))
+            .single()
+            .execute()
+        )
+        profile = profile_resp.data
+        if not profile:
+            return None
+
+        return {
+            "id": str(user.id),
+            "email": user.email,
+            "role": profile["role"],
+            "department": profile.get("department"),
+            "full_name": profile["full_name"],
+            "token": token,
+        }
     except Exception as e:
-        print(f"[Supabase] {method} {url} note:", e)
+        print(f"[Auth] Token verification failed: {e}")
         return None
 
-# ─────────────────────────────────────────────
-# DATABASE INIT
-# ─────────────────────────────────────────────
-def get_db():
-    if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH)
-        g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA journal_mode=WAL")
-        g.db.execute("PRAGMA foreign_keys=ON")
-    return g.db
 
-@app.teardown_appcontext
-def close_db(exc):
-    db = g.pop("db", None)
-    if db:
-        db.close()
-
-def init_db():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    os.makedirs(os.path.join(UPLOAD_DIR, "photos"),  exist_ok=True)
-    os.makedirs(os.path.join(UPLOAD_DIR, "resumes"), exist_ok=True)
-    os.makedirs(os.path.join(UPLOAD_DIR, "papers"),  exist_ok=True)
-
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-
-    # Admins table
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS admins (
-            id       INTEGER PRIMARY KEY AUTOINCREMENT,
-            email    TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            role     TEXT NOT NULL CHECK(role IN ('viewer','editor','secretary','vice_principal')),
-            name     TEXT NOT NULL
-        )
-    """)
-
-    # Applications table (all fields from the recruitment form)
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS applications (
-            id                        INTEGER PRIMARY KEY AUTOINCREMENT,
-            app_uuid                  TEXT UNIQUE NOT NULL,
-            submitted_at              TEXT NOT NULL,
-
-            -- Position
-            position                  TEXT,
-            department                TEXT,
-
-            -- Personal
-            name                      TEXT,
-            photo_path                TEXT,
-            dob                       TEXT,
-            gender                    TEXT,
-            mother_tongue             TEXT,
-            religion                  TEXT,
-            community                 TEXT,
-            category                  TEXT,
-            marital_status            TEXT,
-            spouse_name               TEXT,
-            father_name               TEXT,
-            diff_abled                TEXT,
-            nature                    TEXT,
-            aadhaar_no                TEXT,
-            pan_no                    TEXT,
-            mobile_no                 TEXT,
-            email                     TEXT,
-
-            -- Addresses
-            native_address            TEXT,
-            native_city               TEXT,
-            native_state              TEXT,
-            native_country            TEXT,
-            native_pincode            TEXT,
-            local_address             TEXT,
-            local_city                TEXT,
-            local_state               TEXT,
-            local_country             TEXT,
-            local_pincode             TEXT,
-
-            -- Languages (JSON)
-            languages                 TEXT,
-
-            -- Education (JSON)
-            education                 TEXT,
-
-            -- Eligibility & extra-curricular
-            net                       INTEGER DEFAULT 0,
-            set_slet                  INTEGER DEFAULT 0,
-            nss                       INTEGER DEFAULT 0,
-            ncc                       INTEGER DEFAULT 0,
-            naac                      INTEGER DEFAULT 0,
-            iqac                      INTEGER DEFAULT 0,
-            iso                       INTEGER DEFAULT 0,
-            achivements               TEXT,
-
-            -- Research
-            sci                       INTEGER DEFAULT 0,
-            scopus                    INTEGER DEFAULT 0,
-            ugc                       INTEGER DEFAULT 0,
-            others                    INTEGER DEFAULT 0,
-            scopus_id                 TEXT,
-            h_index_google            INTEGER DEFAULT 0,
-            h_index_scopus            INTEGER DEFAULT 0,
-            books_published_national  INTEGER DEFAULT 0,
-            books_published_international INTEGER DEFAULT 0,
-            books_edited_national     INTEGER DEFAULT 0,
-            books_edited_international INTEGER DEFAULT 0,
-            papers_path               TEXT,
-            chapters_published_national INTEGER DEFAULT 0,
-            chapters_published_international INTEGER DEFAULT 0,
-            chapters_edited_national  INTEGER DEFAULT 0,
-            chapters_edited_international INTEGER DEFAULT 0,
-            minor_projects            INTEGER DEFAULT 0,
-            major_projects            INTEGER DEFAULT 0,
-            projects                  TEXT,
-            patents_applied           INTEGER DEFAULT 0,
-            patents_published         INTEGER DEFAULT 0,
-            patents_granted           INTEGER DEFAULT 0,
-            patents                   TEXT,
-            pdf_details               TEXT,
-            consultancy               TEXT,
-
-            -- Work Experience (JSON)
-            teaching_experience       TEXT,
-            industry_experience       TEXT,
-
-            -- References
-            name_1                    TEXT,
-            address_1                 TEXT,
-            designation_1             TEXT,
-            mobile_1                  TEXT,
-            email_1                   TEXT,
-            name_2                    TEXT,
-            address_2                 TEXT,
-            designation_2             TEXT,
-            mobile_2                  TEXT,
-            email_2                   TEXT,
-
-            -- Others
-            last_pay                  TEXT,
-            pay_expected              TEXT,
-            join_time                 TEXT,
-            relative                  TEXT,
-            already_attended          TEXT,
-            huk                       TEXT,
-            comments                  TEXT,
-            resume_path               TEXT,
-
-            -- Status (admin use)
-            status                    TEXT DEFAULT 'Pending',
-            admin_notes               TEXT
-        )
-    """)
-
-    # Seed admins (SHA-256 hashed passwords)
-    def sha256(pw):
-        return hashlib.sha256(pw.encode()).hexdigest()
-
-    c.execute("""
-        INSERT OR IGNORE INTO admins (email, password, role, name) VALUES
-        (?, ?, 'editor', 'Admin Editor'),
-        (?, ?, 'viewer', 'Admin Viewer'),
-        (?, ?, 'vice_principal', 'Vice Principal'),
-        (?, ?, 'secretary', 'Secretary')
-    """, (
-        "editor@psgcas.ac.in",    sha256("edit123"),
-        "viewer@psgcas.ac.in",    sha256("view123"),
-        "vp@psgcas.ac.in",        sha256("vp@psgcas2024"),
-        "secretary@psgcas.ac.in", sha256("sec@psgcas2024"),
-    ))
-
-    conn.commit()
-    conn.close()
-    print("[OK] Database initialised at", DB_PATH)
-
-
-# ─────────────────────────────────────────────
-# JWT HELPERS
-# ─────────────────────────────────────────────
-def make_token(payload: dict) -> str:
-    payload["exp"] = datetime.utcnow() + TOKEN_EXP
-    payload["iat"] = datetime.utcnow()
-    return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
-
-def decode_token(token: str) -> dict:
-    return jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-
-def token_required(f):
+def auth_required(f):
+    """Require a valid Supabase JWT."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        auth = request.headers.get("Authorization", "")
-        if not auth.startswith("Bearer "):
-            return jsonify(error="Missing token"), 401
-        try:
-            data = decode_token(auth.split(" ", 1)[1])
-            g.current_user = data
-        except jwt.ExpiredSignatureError:
-            return jsonify(error="Token expired"), 401
-        except Exception:
-            return jsonify(error="Invalid token"), 401
-        return f(*args, **kwargs)
-    return decorated
-
-def editor_required(f):
-    @wraps(f)
-    @token_required
-    def decorated(*args, **kwargs):
-        # Accept both 'editor' (legacy) and 'vice_principal' role names
-        if g.current_user.get("role") not in ("editor", "vice_principal"):
-            return jsonify(error="Insufficient permissions"), 403
+        user = _get_user_from_token()
+        if not user:
+            return jsonify(error="Authentication required"), 401
+        g.current_user = user
         return f(*args, **kwargs)
     return decorated
 
 
-# ─────────────────────────────────────────────
+def role_required(*roles):
+    """Require the user to have one of the specified roles."""
+    def decorator(f):
+        @wraps(f)
+        @auth_required
+        def decorated(*args, **kwargs):
+            if g.current_user["role"] not in roles:
+                return jsonify(error="Insufficient permissions"), 403
+            return f(*args, **kwargs)
+        return decorated
+    return decorator
+
+
+# ═════════════════════════════════════════════
 # FILE UPLOAD HELPERS
-# ─────────────────────────────────────────────
+# ═════════════════════════════════════════════
+
 def allowed(filename, allowed_set):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed_set
 
@@ -291,334 +182,522 @@ def save_file(file_obj, subfolder, allowed_set):
         return None
     if not allowed(file_obj.filename, allowed_set):
         return None
-    ext  = file_obj.filename.rsplit(".", 1)[1].lower()
+    ext = file_obj.filename.rsplit(".", 1)[1].lower()
     name = f"{uuid.uuid4().hex}.{ext}"
     path = os.path.join(UPLOAD_DIR, subfolder, name)
     file_obj.save(path)
     return f"/uploads/{subfolder}/{name}"
 
 
-# ─────────────────────────────────────────────
+# ═════════════════════════════════════════════
 # AUTH ROUTES
-# ─────────────────────────────────────────────
+# ═════════════════════════════════════════════
+
 @app.route("/api/login", methods=["POST"])
 def login():
+    """Sign in via Supabase Auth. Returns access token + user profile."""
     data = request.get_json(force=True)
-    email    = (data.get("email") or "").strip().lower()
+    email = (data.get("email") or "").strip().lower()
     password = (data.get("password") or "").strip()
 
     if not email or not password:
         return jsonify(error="Email and password required"), 400
 
-    pw_hash = hashlib.sha256(password.encode()).hexdigest()
-    db = get_db()
-    row = db.execute(
-        "SELECT * FROM admins WHERE email=? AND password=?", (email, pw_hash)
-    ).fetchone()
+    if not sb_anon:
+        return jsonify(error="Auth service not configured"), 503
 
-    if not row:
-        return jsonify(error="Invalid email or password"), 401
-
-    token = make_token({"email": row["email"], "role": row["role"], "name": row["name"]})
-    return jsonify(token=token, role=row["role"], email=row["email"], name=row["name"])
-
-
-# ─────────────────────────────────────────────
-# APPLICATION ROUTES
-# ─────────────────────────────────────────────
-@app.route("/api/apply", methods=["POST"])
-def submit_application():
-    """Public endpoint — applicants POST here (multipart/form-data)."""
-    f = request.form
-
-    # ── Server-side Validation of Mandatory Fields ──
-    name       = (f.get("name") or "").strip()
-    email      = (f.get("email") or "").strip()
-    mobile_no  = (f.get("mobile_no") or "").strip()
-    position   = (f.get("position") or "").strip()
-    department = (f.get("department") or "").strip()
-
-    if not name or not email or not mobile_no or not position or not department:
-        return jsonify(error="Mandatory fields missing: Position, Department, Full Name, Email, and Mobile No. must be filled."), 400
-
-    # Resume upload validation
-    resume_file = request.files.get("resume")
-    if not resume_file or not resume_file.filename:
-        return jsonify(error="Resume upload is required. Please upload your CV/Resume."), 400
-
-    # File uploads
-    photo_path  = save_file(request.files.get("photo"),  "photos",  ALLOWED_PHOTO)
-    resume_path = save_file(resume_file, "resumes", ALLOWED_DOC)
-    papers_path = save_file(request.files.get("papers"), "papers",  ALLOWED_SHEET)
-
-    # JSON sub-tables from client
-    languages           = f.get("languages_json", "[]")
-    education           = f.get("education_json", "[]")
-    teaching_experience = f.get("teaching_json",  "[]")
-    industry_experience = f.get("industry_json",  "[]")
-    projects            = f.get("projects_json",  "[]")
-    patents             = f.get("patents_json",   "[]")
-    pdf_details         = f.get("pdf_json",       "[]")
-
-    # Generate institutional Reference ID (e.g. PSG-2026-A48F9B)
-    year = datetime.now().year
-    ref_suffix = uuid.uuid4().hex[:6].upper()
-    app_uuid = f"PSG-{year}-{ref_suffix}"
-    now      = datetime.now().isoformat()
-
-    db = get_db()
     try:
-        db.execute("""
-            INSERT INTO applications (
-                app_uuid, submitted_at,
-                position, department,
-                name, photo_path, dob, gender, mother_tongue, religion, community, category,
-                marital_status, spouse_name, father_name, diff_abled, nature,
-                aadhaar_no, pan_no, mobile_no, email,
-                native_address, native_city, native_state, native_country, native_pincode,
-                local_address, local_city, local_state, local_country, local_pincode,
-                languages, education,
-                net, set_slet, nss, ncc, naac, iqac, iso, achivements,
-                sci, scopus, ugc, others, scopus_id, h_index_google, h_index_scopus,
-                books_published_national, books_published_international,
-                books_edited_national, books_edited_international,
-                papers_path,
-                chapters_published_national, chapters_published_international,
-                chapters_edited_national, chapters_edited_international,
-                minor_projects, major_projects, projects,
-                patents_applied, patents_published, patents_granted, patents,
-                pdf_details, consultancy,
-                teaching_experience, industry_experience,
-                name_1, address_1, designation_1, mobile_1, email_1,
-                name_2, address_2, designation_2, mobile_2, email_2,
-                last_pay, pay_expected, join_time, relative, already_attended, huk, comments,
-                resume_path
-            ) VALUES (
-                ?,?,  ?,?,  ?,?,?,?,?,?,?,?,  ?,?,?,?,?,  ?,?,?,?,
-                ?,?,?,?,?,  ?,?,?,?,?,
-                ?,?,  ?,?,?,?,?,?,?,?,  ?,?,?,?,?,?,?,  ?,?,  ?,?,  ?,
-                ?,?,  ?,?,  ?,?,?,  ?,?,?,?,  ?,?,  ?,?,
-                ?,?,?,?,?,  ?,?,?,?,?,
-                ?,?,?,?,?,?,?,  ?
-            )
-        """, (
-            app_uuid, now,
-            f.get("position"), f.get("department"),
-            f.get("name"), photo_path, f.get("dob"), f.get("gender"),
-            f.get("mother_tongue"), f.get("religion"), f.get("community"), f.get("category"),
-            f.get("marital_status"), f.get("spouse_name"), f.get("father_name"),
-            f.get("diff_abled"), f.get("nature"),
-            f.get("aadhaar_no"), f.get("pan_no"), f.get("mobile_no"), f.get("email"),
-            f.get("native_address"), f.get("native_city"), f.get("native_state"),
-            f.get("native_country"), f.get("native_pincode"),
-            f.get("local_address"), f.get("local_city"), f.get("local_state"),
-            f.get("local_country"), f.get("local_pincode"),
-            languages, education,
-            1 if f.get("net") else 0, 1 if f.get("set") else 0,
-            1 if f.get("nss") else 0, 1 if f.get("ncc") else 0,
-            1 if f.get("naac") else 0, 1 if f.get("iqac") else 0,
-            1 if f.get("iso") else 0, f.get("achivements"),
-            f.get("sci", 0), f.get("scopus", 0), f.get("ugc", 0), f.get("others", 0),
-            f.get("scopus_id"), f.get("h_index_google", 0), f.get("h_index_scopus", 0),
-            f.get("books_published_national", 0), f.get("books_published_international", 0),
-            f.get("books_edited_national", 0), f.get("books_edited_international", 0),
-            papers_path,
-            f.get("chapters_published_national", 0), f.get("chapters_published_international", 0),
-            f.get("chapters_edited_national", 0), f.get("chapters_edited_international", 0),
-            f.get("minor_projects", 0), f.get("major_projects", 0), projects,
-            f.get("patents_applied", 0), f.get("patents_published", 0), f.get("patents_granted", 0), patents,
-            pdf_details, f.get("consultancy"),
-            teaching_experience, industry_experience,
-            f.get("name_1"), f.get("address_1"), f.get("designation_1"), f.get("mobile_1"), f.get("email_1"),
-            f.get("name_2"), f.get("address_2"), f.get("designation_2"), f.get("mobile_2"), f.get("email_2"),
-            f.get("last_pay"), f.get("pay_expected"), f.get("join_time"),
-            f.get("relative"), f.get("already_attended"), f.get("huk"), f.get("comments"),
-            resume_path,
-        ))
-        db.commit()
+        res = sb_anon.auth.sign_in_with_password({"email": email, "password": password})
+        session = res.session
+        user = res.user
 
-        # Also store in Supabase Cloud PostgreSQL
-        try:
-            app_record = {
-                "app_uuid": app_uuid,
-                "submitted_at": now,
-                "status": "Pending",
-                "admin_notes": "",
-                "position": f.get("position"),
-                "department": f.get("department"),
-                "name": f.get("name"),
-                "photo_path": photo_path,
-                "dob": f.get("dob"),
-                "gender": f.get("gender"),
-                "mother_tongue": f.get("mother_tongue"),
-                "religion": f.get("religion"),
-                "community": f.get("community"),
-                "category": f.get("category"),
-                "marital_status": f.get("marital_status"),
-                "spouse_name": f.get("spouse_name"),
-                "father_name": f.get("father_name"),
-                "diff_abled": f.get("diff_abled"),
-                "nature": f.get("nature"),
-                "aadhaar_no": f.get("aadhaar_no"),
-                "pan_no": f.get("pan_no"),
-                "mobile_no": f.get("mobile_no"),
-                "email": f.get("email"),
-                "native_address": f.get("native_address"),
-                "native_city": f.get("native_city"),
-                "native_state": f.get("native_state"),
-                "native_country": f.get("native_country"),
-                "native_pincode": f.get("native_pincode"),
-                "local_address": f.get("local_address"),
-                "local_city": f.get("local_city"),
-                "local_state": f.get("local_state"),
-                "local_country": f.get("local_country"),
-                "local_pincode": f.get("local_pincode"),
-                "languages": languages,
-                "education": education,
-                "net": "1" if f.get("net") else "0",
-                "set_slet": "1" if f.get("set") else "0",
-                "nss": "1" if f.get("nss") else "0",
-                "ncc": "1" if f.get("ncc") else "0",
-                "naac": "1" if f.get("naac") else "0",
-                "iqac": "1" if f.get("iqac") else "0",
-                "iso": "1" if f.get("iso") else "0",
-                "achivements": f.get("achivements"),
-                "sci": str(f.get("sci", 0)),
-                "scopus": str(f.get("scopus", 0)),
-                "ugc": str(f.get("ugc", 0)),
-                "others": str(f.get("others", 0)),
-                "scopus_id": f.get("scopus_id"),
-                "h_index_google": str(f.get("h_index_google", 0)),
-                "h_index_scopus": str(f.get("h_index_scopus", 0)),
-                "books_published_national": str(f.get("books_published_national", 0)),
-                "books_published_international": str(f.get("books_published_international", 0)),
-                "books_edited_national": str(f.get("books_edited_national", 0)),
-                "books_edited_international": str(f.get("books_edited_international", 0)),
-                "papers_path": papers_path,
-                "chapters_published_national": str(f.get("chapters_published_national", 0)),
-                "chapters_published_international": str(f.get("chapters_published_international", 0)),
-                "chapters_edited_national": str(f.get("chapters_edited_national", 0)),
-                "chapters_edited_international": str(f.get("chapters_edited_international", 0)),
-                "minor_projects": str(f.get("minor_projects", 0)),
-                "major_projects": str(f.get("major_projects", 0)),
-                "projects": projects,
-                "patents_applied": str(f.get("patents_applied", 0)),
-                "patents_published": str(f.get("patents_published", 0)),
-                "patents_granted": str(f.get("patents_granted", 0)),
-                "patents": patents,
-                "pdf_details": pdf_details,
-                "consultancy": f.get("consultancy"),
-                "teaching_experience": teaching_experience,
-                "industry_experience": industry_experience,
-                "name_1": f.get("name_1"),
-                "address_1": f.get("address_1"),
-                "designation_1": f.get("designation_1"),
-                "mobile_1": f.get("mobile_1"),
-                "email_1": f.get("email_1"),
-                "name_2": f.get("name_2"),
-                "address_2": f.get("address_2"),
-                "designation_2": f.get("designation_2"),
-                "mobile_2": f.get("mobile_2"),
-                "email_2": f.get("email_2"),
-                "last_pay": f.get("last_pay"),
-                "pay_expected": f.get("pay_expected"),
-                "join_time": f.get("join_time"),
-                "relative": f.get("relative"),
-                "already_attended": f.get("already_attended"),
-                "huk": f.get("huk"),
-                "comments": f.get("comments"),
-                "resume_path": resume_path
-            }
-            sb_res = supabase_request("POST", "applications", body=app_record)
-            if sb_res is not None:
-                print(f"[Supabase] Application stored in Supabase: {app_uuid}")
-        except Exception as _sbe:
-            print("[Supabase] Insert notice:", _sbe)
+        if not session or not user:
+            return jsonify(error="Invalid email or password"), 401
+
+        # Fetch profile
+        profile_resp = (
+            sb_admin.table("profiles")
+            .select("role, department, full_name")
+            .eq("id", str(user.id))
+            .single()
+            .execute()
+        )
+        profile = profile_resp.data
+
+        if not profile:
+            return jsonify(error="User profile not found. Contact administrator."), 403
+
+        return jsonify(
+            token=session.access_token,
+            refresh_token=session.refresh_token,
+            role=profile["role"],
+            department=profile.get("department"),
+            email=user.email,
+            name=profile["full_name"],
+        )
 
     except Exception as e:
-        print("DB error:", e)
-        return jsonify(error="Failed to save application. " + str(e)), 500
+        err = str(e)
+        if "Invalid login" in err or "invalid" in err.lower():
+            return jsonify(error="Invalid email or password"), 401
+        print(f"[Login Error] {e}")
+        return jsonify(error="Login failed. Please try again."), 500
+
+
+@app.route("/api/signup", methods=["POST"])
+def signup():
+    """Candidate self-registration via Supabase Auth."""
+    data = request.get_json(force=True)
+    email = (data.get("email") or "").strip().lower()
+    password = (data.get("password") or "").strip()
+    full_name = (data.get("full_name") or "").strip()
+
+    if not email or not password or not full_name:
+        return jsonify(error="Email, password, and full name are required"), 400
+
+    if len(password) < 6:
+        return jsonify(error="Password must be at least 6 characters"), 400
+
+    if not sb_anon:
+        return jsonify(error="Auth service not configured"), 503
+
+    try:
+        res = sb_anon.auth.sign_up({
+            "email": email,
+            "password": password,
+            "options": {
+                "data": {
+                    "role": "candidate",
+                    "full_name": full_name,
+                }
+            }
+        })
+        user = res.user
+        session = res.session
+
+        if not user:
+            return jsonify(error="Registration failed"), 500
+
+        # If auto-confirm is on, session is returned immediately
+        if session:
+            return jsonify(
+                token=session.access_token,
+                refresh_token=session.refresh_token,
+                role="candidate",
+                email=user.email,
+                name=full_name,
+                message="Account created successfully!",
+            ), 201
+        else:
+            return jsonify(
+                message="Account created! Please check your email to confirm.",
+                email=user.email,
+            ), 201
+
+    except Exception as e:
+        err = str(e)
+        if "already been registered" in err or "duplicate" in err.lower():
+            return jsonify(error="An account with this email already exists. Please log in."), 409
+        print(f"[Signup Error] {e}")
+        return jsonify(error="Registration failed. Please try again."), 500
+
+
+@app.route("/api/me", methods=["GET"])
+@auth_required
+def get_me():
+    """Return the current user's profile."""
+    u = g.current_user
+    return jsonify(
+        id=u["id"],
+        email=u["email"],
+        role=u["role"],
+        department=u["department"],
+        name=u["full_name"],
+    )
+
+
+# ═════════════════════════════════════════════
+# APPLICATION WINDOW HELPER
+# ═════════════════════════════════════════════
+
+def _get_application_window_state():
+    """Retrieve window configuration and compute state: 'not_open_yet' | 'open' | 'closed' in Asia/Kolkata (IST).
+    Returns (state, message, is_error).
+    Fail-closed: if DB read or date parsing fails, returns ('closed', error_msg, True).
+    """
+    if not sb_admin:
+        return "closed", "Database client uninitialized", True
+
+    try:
+        res = sb_admin.table("app_settings").select("key, value").execute()
+        settings = {row["key"]: row["value"] for row in (res.data or [])}
+    except Exception as e:
+        print(f"[ERROR] Failed to read app_settings: {e}")
+        return "closed", f"Database lookup error: {e}", True
+
+    legacy_toggle = settings.get("applications_open")
+
+    # HARD OVERRIDE: applications_open = false closes applications even inside date window!
+    if legacy_toggle is not None and str(legacy_toggle).lower() in ("false", "0", "no", "closed"):
+        return "closed", "Applications are manually closed by administrator", False
+
+    open_date_str = settings.get("open_date")
+    close_date_str = settings.get("close_date")
+
+    now = datetime.now(IST)
+
+    if open_date_str or close_date_str:
+        if open_date_str:
+            try:
+                if "T" in open_date_str:
+                    open_dt = datetime.fromisoformat(open_date_str.replace("Z", "+00:00")).astimezone(IST)
+                else:
+                    open_dt = datetime.strptime(open_date_str[:10], "%Y-%m-%d").replace(tzinfo=IST)
+                if now < open_dt:
+                    return "not_open_yet", f"Applications will open on {open_date_str}", False
+            except Exception as e:
+                print(f"[ERROR] Failed to parse open_date '{open_date_str}': {e}")
+                return "closed", f"Invalid open_date configuration: {e}", True
+
+        if close_date_str:
+            try:
+                if "T" in close_date_str:
+                    close_dt = datetime.fromisoformat(close_date_str.replace("Z", "+00:00")).astimezone(IST)
+                else:
+                    close_dt = datetime.strptime(close_date_str[:10], "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=IST)
+                if now > close_dt:
+                    return "closed", f"Applications closed on {close_date_str}", False
+            except Exception as e:
+                print(f"[ERROR] Failed to parse close_date '{close_date_str}': {e}")
+                return "closed", f"Invalid close_date configuration: {e}", True
+
+        return "open", "Applications are open", False
+
+    return "open", "Applications are open", False
+
+
+# ═════════════════════════════════════════════
+# APPLICATION ROUTES
+# ═════════════════════════════════════════════
+
+@app.route("/api/apply", methods=["POST"])
+@auth_required
+def submit_application():
+    """Submit application (requires candidate auth).
+    Enforces application open/close window on final submit and is_locked on writes.
+    Fails closed on database errors.
+    """
+    user = g.current_user
+    if user["role"] != "candidate" and user["role"] != "admin":
+        return jsonify(error="Only candidates can submit applications"), 403
+
+    f = request.form
+
+    # ── Mandatory fields ──
+    name = (f.get("name") or "").strip()
+    email_field = (f.get("email") or "").strip()
+    mobile_no = (f.get("mobile_no") or "").strip()
+    position = (f.get("position") or "").strip()
+    department = (f.get("department") or "").strip()
+
+    if not name or not email_field or not mobile_no or not position or not department:
+        return jsonify(error="Mandatory fields missing: Position, Department, Full Name, Email, and Mobile No."), 400
+
+    is_final_submit = (f.get("is_submitted") == "true")
+
+    # 1. Enforce Application Window ONLY on final submit (Draft saves permitted anytime if unlocked)
+    if is_final_submit:
+        window_state, window_msg, is_err = _get_application_window_state()
+        if is_err:
+            return jsonify(error=f"Application window lookup failed: {window_msg}"), 503
+        if window_state != "open":
+            return jsonify(error=f"Cannot submit application: {window_msg}"), 403
+
+    # 2. Check existing application lock status for candidate (Fail Closed)
+    existing_app = None
+    try:
+        ex_res = sb_admin.table("applications").select("id, is_locked, app_uuid").eq("user_id", user["id"]).limit(1).execute()
+        if ex_res.data:
+            existing_app = ex_res.data[0]
+            if existing_app.get("is_locked"):
+                return jsonify(error="Application is submitted and locked. Edits are not allowed."), 403
+    except Exception as e:
+        print(f"[ERROR] Lock status check failed in submit_application: {e}")
+        return jsonify(error=f"Database error checking lock status: {e}"), 503
+
+    # File uploads
+    photo_path = save_file(request.files.get("photo"), "photos", ALLOWED_PHOTO)
+    resume_file = request.files.get("resume")
+    resume_path = save_file(resume_file, "resumes", ALLOWED_DOC) if resume_file else None
+
+    # Reference ID: Atomic department-scoped counter <DeptCode>/<3-digit number>
+    if not existing_app:
+        try:
+            num_res = sb_admin.rpc("generate_application_number", {"p_department": department}).execute()
+            if not num_res.data:
+                return jsonify(error="RPC generate_application_number returned empty reference ID"), 503
+            app_uuid = num_res.data
+        except Exception as e:
+            print(f"[ERROR] Department reference ID RPC generation failed: {e}")
+            return jsonify(error=f"Failed to generate application reference ID: {e}"), 503
+    else:
+        app_uuid = existing_app["app_uuid"]
+
+    now = datetime.now(IST).isoformat()
+
+    CANDIDATE_EDITABLE_FIELDS = [
+        "position", "department", "name", "dob", "gender", "mother_tongue", "religion",
+        "community", "category", "father_name", "mobile_no", "email",
+        "marital_status", "spouse_name", "diff_abled", "nature", "aadhaar_no", "pan_no",
+        "native_address", "native_city", "native_state", "native_country", "native_pincode",
+        "local_address", "local_city", "local_state", "local_country", "local_pincode",
+        "achivements", "sci", "scopus", "ugc", "others", "scopus_id", "h_index_google",
+        "h_index_scopus", "consultancy", "last_pay", "pay_expected", "join_time",
+        "relative", "already_attended", "huk", "comments",
+        "name_1", "address_1", "designation_1", "mobile_1", "email_1",
+        "name_2", "address_2", "designation_2", "mobile_2", "email_2",
+        "iso_involvement", "iso_details", "naac_iqac_details", "admin_positions_json"
+    ]
+
+    app_record = {}
+    for key in CANDIDATE_EDITABLE_FIELDS:
+        if f.get(key) is not None:
+            val = f.get(key)
+            if key == "iso_involvement":
+                val = (val == "true" or val is True or val == "on" or val == "1")
+            app_record[key] = val
+
+    # Server-controlled fields: strictly forced by backend
+    app_record["app_uuid"] = app_uuid
+    app_record["submitted_at"] = now
+    app_record["status"] = "Pending" if is_final_submit else "Draft"
+    app_record["hod_status"] = "Pending"
+    app_record["vp_status"] = "Pending"
+    app_record["user_id"] = user["id"]
+    app_record["is_locked"] = is_final_submit
+    app_record["position"] = position
+    app_record["department"] = department
+    app_record["name"] = name
+    app_record["mobile_no"] = mobile_no
+    app_record["email"] = email_field
+
+    if photo_path: app_record["photo_path"] = photo_path
+    if resume_path: app_record["resume_path"] = resume_path
+
+    try:
+        if existing_app:
+            sb_admin.table("applications").update(app_record).eq("id", existing_app["id"]).execute()
+            app_id = existing_app["id"]
+        else:
+            ins = sb_admin.table("applications").insert(app_record).execute()
+            app_id = ins.data[0]["id"] if (ins.data and len(ins.data) > 0) else 0
+    except Exception as e:
+        print(f"[ERROR] Failed to save application record: {e}")
+        return jsonify(error="Failed to save application. " + str(e)), 503
+
+    if is_final_submit:
+        user_identifier = user.get("email") or user.get("id", "unknown")
+        log_audit(user_identifier, "SUBMIT_FINAL_LOCK", application_id=app_id, old_value=False, new_value=True)
 
     return jsonify(
         success=True,
+        application_id=app_id,
         app_uuid=app_uuid,
+        app_number=app_uuid,
         name=name,
         position=position,
         department=department,
-        email=email,
-        date=datetime.now().strftime("%d %b %Y, %I:%M %p"),
-        message="Application submitted successfully!"
+        is_locked=is_final_submit,
+        message="Application saved successfully!",
     ), 201
 
 
+@app.route("/api/my-application", methods=["GET", "POST"])
+@auth_required
+def my_application():
+    """Candidate draft endpoint: GET current candidate application, POST update draft."""
+    user = g.current_user
+    if user["role"] != "candidate":
+        return jsonify(error="Only candidates can access my-application"), 403
+
+    if request.method == "GET":
+        try:
+            res = sb_admin.table("applications").select("*").eq("user_id", user["id"]).limit(1).execute()
+            if not res.data:
+                return jsonify(error="No application found"), 404
+            return jsonify(res.data[0])
+        except Exception as e:
+            print(f"[ERROR] my_application GET failed: {e}")
+            return jsonify(error=f"Database error fetching application: {e}"), 503
+
+    # POST is equivalent to submit_application
+    return submit_application()
+
+
+
 @app.route("/api/applications", methods=["GET"])
-@token_required
+@auth_required
 def get_applications():
-    """Admin: list all applications with optional filters."""
+    """Role-scoped application listing.
+    - candidate: own applications only
+    - hod: their department only
+    - superadmin/admin: all
+    - hr: only vp_status='Shortlisted'
+    """
+    role = g.current_user["role"]
+    dept_filter = request.args.get("department")
     position = request.args.get("position")
-    dept     = request.args.get("department")
-    status   = request.args.get("status")
-    q        = request.args.get("q")
+    status = request.args.get("status")
+    hod_status = request.args.get("hod_status")
+    vp_status = request.args.get("vp_status")
+    q = request.args.get("q")
 
-    # 1. Try fetching from Supabase
-    try:
-        sb_params = {"select": "*", "order": "submitted_at.desc"}
-        if position: sb_params["position"] = f"eq.{position}"
-        if dept:     sb_params["department"] = f"eq.{dept}"
-        if status:   sb_params["status"] = f"eq.{status}"
-        if q:        sb_params["or"] = f"(name.ilike.*{q}*,email.ilike.*{q}*,department.ilike.*{q}*,position.ilike.*{q}*)"
+    query = sb_admin.table("applications").select("*").order("submitted_at", desc=True)
 
-        sb_rows = supabase_request("GET", "applications", params=sb_params)
-        if sb_rows is not None and isinstance(sb_rows, list):
-            return jsonify(applications=sb_rows)
-    except Exception as _e:
-        print("[Supabase] fallback to SQLite:", _e)
+    # ── Role-based scoping ──
+    if role == "candidate":
+        query = query.eq("user_id", g.current_user["id"])
+    elif role == "hod":
+        query = query.eq("department", g.current_user["department"])
+    elif role == "hr":
+        query = query.eq("vp_status", "Shortlisted")
+    # admin & superadmin see all
 
-    # 2. Fallback to local SQLite
-    db = get_db()
-    where, params = [], []
-
-    if position: where.append("position=?");   params.append(position)
-    if dept:     where.append("department=?"); params.append(dept)
-    if status:   where.append("status=?");     params.append(status)
+    # ── Optional filters ──
+    if dept_filter:
+        query = query.eq("department", dept_filter)
+    if position:
+        query = query.eq("position", position)
+    if status:
+        query = query.eq("status", status)
+    if hod_status:
+        query = query.eq("hod_status", hod_status)
+    if vp_status and role != "hr":  # HR already filtered
+        query = query.eq("vp_status", vp_status)
     if q:
-        where.append("(name LIKE ? OR email LIKE ? OR department LIKE ? OR position LIKE ?)")
-        patt = f"%{q}%"
-        params += [patt, patt, patt, patt]
+        query = query.or_(
+            f"name.ilike.%{q}%,email.ilike.%{q}%,department.ilike.%{q}%,position.ilike.%{q}%"
+        )
 
-    sql = "SELECT * FROM applications"
-    if where: sql += " WHERE " + " AND ".join(where)
-    sql += " ORDER BY submitted_at DESC"
-
-    rows = db.execute(sql, params).fetchall()
-    return jsonify(applications=[dict(r) for r in rows])
+    try:
+        res = query.execute()
+        return jsonify(applications=res.data or [])
+    except Exception as e:
+        print(f"[DB Error] {e}")
+        return jsonify(applications=[], error=str(e)), 500
 
 
 @app.route("/api/applications/<int:app_id>", methods=["GET"])
-@token_required
+@auth_required
 def get_application(app_id):
-    # Try Supabase first
+    """Get a single application (role-scoped)."""
+    role = g.current_user["role"]
+
+    ALLOWED_ROLES = {"candidate", "hod", "hr", "superadmin", "admin"}
+    if role not in ALLOWED_ROLES:
+        return jsonify(error=f"Role '{role}' is not authorized to access application details"), 403
+
     try:
-        sb_res = supabase_request("GET", "applications", params={"id": f"eq.{app_id}", "select": "*"})
-        if sb_res and isinstance(sb_res, list) and len(sb_res) > 0:
-            return jsonify(sb_res[0])
-    except Exception:
-        pass
+        res = sb_admin.table("applications").select("*").eq("id", app_id).limit(1).execute()
+        if not res.data:
+            return jsonify(error="Application not found"), 404
+        app_data = res.data[0]
+    except Exception as e:
+        print(f"[ERROR] Application lookup failed for app_id {app_id}: {e}")
+        return jsonify(error=f"Database lookup error: {e}"), 503
 
-    db = get_db()
-    row = db.execute("SELECT * FROM applications WHERE id=?", (app_id,)).fetchone()
-    if not row:
-        return jsonify(error="Not found"), 404
-    return jsonify(dict(row))
+    # Enforce scoping
+    if role == "candidate" and app_data.get("user_id") != g.current_user["id"]:
+        return jsonify(error="Access denied"), 403
+    elif role == "hod" and app_data.get("department") != g.current_user["department"]:
+        return jsonify(error="Access denied"), 403
+    elif role == "hr" and app_data.get("vp_status") != "Shortlisted":
+        return jsonify(error="Access denied"), 403
+
+    return jsonify(app_data)
 
 
+# ── HOD REVIEW ───────────────────────────────
+@app.route("/api/applications/<int:app_id>/hod-review", methods=["PUT"])
+@role_required("hod")
+def hod_review(app_id):
+    """HOD marks a candidate as Eligible or Not Eligible."""
+    data = request.get_json(force=True)
+    new_status = data.get("hod_status")
+
+    if new_status not in ("Eligible", "Not Eligible"):
+        return jsonify(error="hod_status must be 'Eligible' or 'Not Eligible'"), 400
+
+    # Verify this application is in the HOD's department
+    try:
+        app_res = sb_admin.table("applications").select("department, hod_status").eq("id", app_id).limit(1).execute()
+        if not app_res.data:
+            return jsonify(error="Application not found"), 404
+        if app_res.data[0]["department"] != g.current_user["department"]:
+            return jsonify(error="This application is not in your department"), 403
+        old_status = app_res.data[0].get("hod_status")
+    except Exception as e:
+        print(f"[ERROR] HOD review department check failed: {e}")
+        return jsonify(error=f"Database error checking department: {e}"), 503
+
+    try:
+        sb_admin.rpc("rpc_update_hod_status", {
+            "p_app_id": app_id,
+            "p_who": g.current_user["email"],
+            "p_status": new_status,
+            "p_remarks": data.get("admin_notes", "")
+        }).execute()
+        return jsonify(success=True, hod_status=new_status)
+    except Exception as e:
+        print(f"[ERROR] HOD review update failed: {e}")
+        return jsonify(error=f"Failed to update HOD review: {e}"), 503
+
+
+# ── VP REVIEW ────────────────────────────────
+@app.route("/api/applications/<int:app_id>/vp-review", methods=["PUT"])
+@role_required("superadmin")
+def vp_review(app_id):
+    """VP marks a candidate as Shortlisted or Not Shortlisted.
+    Only allowed if hod_status == 'Eligible'.
+    """
+    data = request.get_json(force=True)
+    new_status = data.get("vp_status")
+
+    if new_status not in ("Shortlisted", "Not Shortlisted"):
+        return jsonify(error="vp_status must be 'Shortlisted' or 'Not Shortlisted'"), 400
+
+    # Check that the candidate is Eligible
+    try:
+        app_res = sb_admin.table("applications").select("hod_status, vp_status").eq("id", app_id).limit(1).execute()
+        if not app_res.data:
+            return jsonify(error="Application not found"), 404
+        if app_res.data[0]["hod_status"] != "Eligible":
+            return jsonify(error="Cannot shortlist: candidate has not been marked Eligible by HOD"), 403
+    except Exception as e:
+        print(f"[ERROR] VP review eligibility check failed: {e}")
+        return jsonify(error=f"Database error checking eligibility: {e}"), 503
+
+    try:
+        sb_admin.rpc("rpc_update_vp_status", {
+            "p_app_id": app_id,
+            "p_who": g.current_user["email"],
+            "p_status": new_status,
+            "p_remarks": data.get("admin_notes", "")
+        }).execute()
+        return jsonify(success=True, vp_status=new_status)
+    except Exception as e:
+        print(f"[ERROR] VP review update failed: {e}")
+        return jsonify(error=f"Failed to update VP review: {e}"), 503
+
+
+# ── ADMIN: update any application ────────────
 @app.route("/api/applications/<int:app_id>", methods=["PUT"])
-@editor_required
+@role_required("admin")
 def update_application(app_id):
-    """Editor only: update application fields or status/notes."""
+    """Admin: update application fields."""
     data = request.get_json(force=True)
     allowed_fields = {
-        "status", "admin_notes",
+        "status", "admin_notes", "hod_status", "vp_status", "is_locked",
         "name", "email", "mobile_no", "department", "position",
         "dob", "gender", "mother_tongue", "religion", "community", "category",
         "marital_status", "spouse_name", "father_name", "diff_abled", "nature",
@@ -635,166 +714,667 @@ def update_application(app_id):
     if not updates:
         return jsonify(error="No valid fields to update"), 400
 
-    # Sync to Supabase
     try:
-        supabase_request("PATCH", f"applications?id=eq.{app_id}", body=updates)
-    except Exception as _e:
-        print("[Supabase] update notice:", _e)
+        if "is_locked" in updates:
+            sb_admin.rpc("rpc_update_application_lock", {
+                "p_app_id": app_id,
+                "p_who": g.current_user["email"],
+                "p_is_locked": updates["is_locked"]
+            }).execute()
 
-    db  = get_db()
-    row = db.execute("SELECT id FROM applications WHERE id=?", (app_id,)).fetchone()
-    if not row:
-        return jsonify(error="Not found"), 404
-
-    data = request.get_json(force=True)
-    allowed_fields = {
-        "status", "admin_notes",
-        "name", "email", "mobile_no", "department", "position",
-        "dob", "gender", "mother_tongue", "religion", "community", "category",
-        "marital_status", "spouse_name", "father_name", "diff_abled", "nature",
-        "aadhaar_no", "pan_no", "native_address", "native_city", "native_state",
-        "native_country", "native_pincode", "local_address", "local_city",
-        "local_state", "local_country", "local_pincode", "achivements",
-        "sci", "scopus", "ugc", "others", "scopus_id", "h_index_google", "h_index_scopus",
-        "consultancy", "last_pay", "pay_expected", "join_time", "relative",
-        "already_attended", "huk", "comments",
-        "name_1","address_1","designation_1","mobile_1","email_1",
-        "name_2","address_2","designation_2","mobile_2","email_2",
-    }
-    updates = {k: v for k, v in data.items() if k in allowed_fields}
-    if not updates:
-        return jsonify(error="No valid fields to update"), 400
-
-    set_clause = ", ".join(f"{k}=?" for k in updates)
-    vals = list(updates.values()) + [app_id]
-    db.execute(f"UPDATE applications SET {set_clause} WHERE id=?", vals)
-    db.commit()
-    return jsonify(success=True, updated=list(updates.keys()))
+        other_updates = {k: v for k, v in updates.items() if k != "is_locked"}
+        if other_updates:
+            sb_admin.table("applications").update(other_updates).eq("id", app_id).execute()
+        return jsonify(success=True, updated=list(updates.keys()))
+    except Exception as e:
+        print(f"[ERROR] Admin update application failed: {e}")
+        return jsonify(error=f"Failed to update application: {e}"), 503
 
 
 @app.route("/api/applications/<int:app_id>", methods=["DELETE"])
-@editor_required
+@role_required("admin")
 def delete_application(app_id):
-    db = get_db()
-    row = db.execute("SELECT * FROM applications WHERE id=?", (app_id,)).fetchone()
-    if not row:
-        return jsonify(error="Not found"), 404
-
-    # Remove uploaded files
-    for field in ("photo_path", "resume_path", "papers_path"):
-        path = row[field]
-        if path:
-            disk = os.path.join(BASE_DIR, path.lstrip("/"))
-            if os.path.exists(disk):
-                os.remove(disk)
-
-    # Sync delete to Supabase
+    """Admin only: delete an application."""
     try:
-        supabase_request("DELETE", f"applications?id=eq.{app_id}")
-    except Exception as _e:
-        print("[Supabase] delete notice:", _e)
+        # Get file paths for cleanup
+        app_res = sb_admin.table("applications").select("photo_path, resume_path, papers_path").eq("id", app_id).limit(1).execute()
+        if app_res.data:
+            for field in ("photo_path", "resume_path", "papers_path"):
+                path = app_res.data[0].get(field)
+                if path:
+                    disk = os.path.join(BASE_DIR, path.lstrip("/"))
+                    if os.path.exists(disk):
+                        os.remove(disk)
 
-    db.execute("DELETE FROM applications WHERE id=?", (app_id,))
-    db.commit()
-    return jsonify(success=True)
+        sb_admin.table("applications").delete().eq("id", app_id).execute()
+        log_audit(g.current_user["email"], "DELETE_APPLICATION", application_id=app_id)
+        return jsonify(success=True)
+    except Exception as e:
+        print(f"[ERROR] Delete application failed: {e}")
+        return jsonify(error=f"Failed to delete application: {e}"), 503
 
 
-@app.route("/api/stats", methods=["GET"])
-@token_required
-def get_stats():
-    db = get_db()
-    total = db.execute("SELECT COUNT(*) FROM applications").fetchone()[0]
-    ra    = db.execute("SELECT COUNT(*) FROM applications WHERE position LIKE '%Research%'").fetchone()[0]
-    ta    = db.execute("SELECT COUNT(*) FROM applications WHERE position LIKE '%Teaching%'").fetchone()[0]
-    today = datetime.now().strftime("%Y-%m-%d")
-    tod   = db.execute("SELECT COUNT(*) FROM applications WHERE submitted_at LIKE ?", (today+"%",)).fetchone()[0]
-    depts = db.execute(
-        "SELECT department, COUNT(*) as cnt FROM applications GROUP BY department ORDER BY cnt DESC LIMIT 10"
-    ).fetchall()
-    statuses = db.execute(
-        "SELECT status, COUNT(*) as cnt FROM applications GROUP BY status"
-    ).fetchall()
+# ═════════════════════════════════════════════
+# STRUCTURED RESEARCH & PDF ROUTES
+# ═════════════════════════════════════════════
+
+@app.route("/api/applications/<int:app_id>/research", methods=["GET"])
+@auth_required
+def get_application_research(app_id):
+    """Retrieve structured research details & summary counts for an application."""
+    user = g.current_user
+    role = user["role"]
+
+    ALLOWED_ROLES = {"candidate", "hod", "hr", "superadmin", "admin"}
+    if role not in ALLOWED_ROLES:
+        return jsonify(error=f"Role '{role}' is not authorized to access research data"), 403
+
+    try:
+        app_res = sb_admin.table("applications").select("*").eq("id", app_id).limit(1).execute()
+        if not app_res.data:
+            return jsonify(error="Application not found"), 404
+        app_data = app_res.data[0]
+    except Exception as e:
+        print(f"[ERROR] Research GET lookup failed for app_id {app_id}: {e}")
+        return jsonify(error=f"Database error fetching application: {e}"), 503
+
+    # Enforce scoping in Flask
+    if role == "candidate" and app_data.get("user_id") != user["id"]:
+        return jsonify(error="Access denied: not your application"), 403
+    elif role == "hod" and app_data.get("department") != user["department"]:
+        return jsonify(error="Access denied: application outside your department"), 403
+    elif role == "hr" and app_data.get("vp_status") != "Shortlisted":
+        return jsonify(error="Access denied: HR can only access shortlisted candidates"), 403
+
+    # Fetch child table records fail-closed
+    try:
+        pubs = sb_admin.table("app_publications").select("*").eq("application_id", app_id).order("id").execute().data or []
+        pats = sb_admin.table("app_patents").select("*").eq("application_id", app_id).order("id").execute().data or []
+        cons = sb_admin.table("app_consultancy").select("*").eq("application_id", app_id).order("id").execute().data or []
+        prjs = sb_admin.table("app_projects").select("*").eq("application_id", app_id).order("id").execute().data or []
+    except Exception as e:
+        print(f"[ERROR] Research GET child table fetch failed: {e}")
+        return jsonify(error=f"Database error fetching research records: {e}"), 503
+
+    # Parse admin positions
+    try:
+        admin_positions = json.loads(app_data.get("admin_positions_json") or "[]")
+    except Exception as e:
+        print(f"[WARN] Failed to parse admin_positions_json: {e}")
+        admin_positions = []
+
+    # Compute summary counts
+    counts = {
+        "sci": sum(1 for p in pubs if p.get("type") == "Journal article" and p.get("indexing_category") == "SCI"),
+        "scopus": sum(1 for p in pubs if p.get("type") == "Journal article" and p.get("indexing_category") == "Scopus"),
+        "ugc_other": sum(1 for p in pubs if p.get("type") == "Journal article" and p.get("indexing_category") in ("UGC-listed", "Other")),
+        "books": sum(1 for p in pubs if p.get("type") == "Book"),
+        "chapters": sum(1 for p in pubs if p.get("type") == "Book chapter"),
+        "patents_published": sum(1 for p in pats if p.get("status") == "Published"),
+        "patents_granted": sum(1 for p in pats if p.get("status") == "Granted"),
+        "projects_major": sum(1 for prj in prjs if prj.get("type") == "Major"),
+        "projects_minor": sum(1 for prj in prjs if prj.get("type") == "Minor"),
+        "consultancy_count": len(cons),
+        "consultancy_total": float(sum(float(c.get("amount") or 0) for c in cons)),
+    }
+
     return jsonify(
-        total=total, research_assistant=ra, teaching_assistant=ta, today=tod,
-        by_department=[dict(r) for r in depts],
-        by_status=[dict(r) for r in statuses]
+        application_id=app_id,
+        counts=counts,
+        publications=pubs,
+        patents=pats,
+        consultancy=cons,
+        projects=prjs,
+        iso_involvement=bool(app_data.get("iso_involvement")),
+        iso_details=app_data.get("iso_details", ""),
+        naac_iqac_details=app_data.get("naac_iqac_details", ""),
+        admin_positions=admin_positions,
     )
 
 
+@app.route("/api/applications/<int:app_id>/research", methods=["POST"])
+@auth_required
+def save_application_research(app_id):
+    """Save/update research child rows atomically for an application."""
+    user = g.current_user
+    role = user["role"]
+
+    ALLOWED_ROLES = {"candidate", "hod", "hr", "superadmin", "admin"}
+    if role not in ALLOWED_ROLES:
+        return jsonify(error=f"Role '{role}' is not authorized to edit research data"), 403
+
+    if role not in ("candidate", "admin"):
+        return jsonify(error="Only candidate or admin can edit research data"), 403
+
+    try:
+        app_res = sb_admin.table("applications").select("user_id, is_locked, department").eq("id", app_id).limit(1).execute()
+        if not app_res.data:
+            return jsonify(error="Application not found"), 404
+        app_data = app_res.data[0]
+    except Exception as e:
+        print(f"[ERROR] Lock status check failed in save_application_research: {e}")
+        return jsonify(error=f"Database error checking application lock status: {e}"), 503
+
+    if role == "candidate" and app_data.get("user_id") != user["id"]:
+        return jsonify(error="Access denied: not your application"), 403
+
+    # Lock check applies to BOTH candidate and admin on this POST route
+    if app_data.get("is_locked"):
+        return jsonify(error="Application is submitted and locked. Edits are not allowed."), 403
+
+    data = request.get_json(force=True)
+
+    try:
+        sb_admin.rpc("save_application_research", {
+            "p_application_id": app_id,
+            "p_publications": data.get("publications", []),
+            "p_patents": data.get("patents", []),
+            "p_consultancy": data.get("consultancy", []),
+            "p_projects": data.get("projects", []),
+            "p_iso_involvement": bool(data.get("iso_involvement")),
+            "p_iso_details": str(data.get("iso_details", "")),
+            "p_naac_iqac_details": str(data.get("naac_iqac_details", "")),
+            "p_admin_positions": data.get("admin_positions", []),
+        }).execute()
+
+        return jsonify(success=True, message="Research data saved successfully.")
+
+    except Exception as e:
+        print(f"[ERROR] Research RPC execution failed: {e}")
+        return jsonify(error=f"Failed to save research data: {e}"), 503
+
+
+@app.route("/api/applications/<int:app_id>/pdf", methods=["GET"])
+@auth_required
+def generate_application_pdf(app_id):
+    """Generate and stream official biodata PDF for an application."""
+    user = g.current_user
+    role = user["role"]
+
+    ALLOWED_ROLES = {"candidate", "hod", "hr", "superadmin", "admin"}
+    if role not in ALLOWED_ROLES:
+        return jsonify(error=f"Role '{role}' is not authorized to generate PDF"), 403
+
+    try:
+        app_res = sb_admin.table("applications").select("*").eq("id", app_id).limit(1).execute()
+        if not app_res.data:
+            return jsonify(error="Application not found"), 404
+        app_data = app_res.data[0]
+    except Exception as e:
+        print(f"[ERROR] PDF generation application lookup failed for app_id {app_id}: {e}")
+        return jsonify(error=f"Database error fetching application: {e}"), 503
+
+    # Enforce scoping
+    if role == "candidate" and app_data.get("user_id") != user["id"]:
+        return jsonify(error="Access denied"), 403
+    elif role == "hod" and app_data.get("department") != user["department"]:
+        return jsonify(error="Access denied"), 403
+    elif role == "hr" and app_data.get("vp_status") != "Shortlisted":
+        return jsonify(error="Access denied"), 403
+
+    # Fetch child records fail closed
+    try:
+        pubs = sb_admin.table("app_publications").select("*").eq("application_id", app_id).order("id").execute().data or []
+        pats = sb_admin.table("app_patents").select("*").eq("application_id", app_id).order("id").execute().data or []
+        cons = sb_admin.table("app_consultancy").select("*").eq("application_id", app_id).order("id").execute().data or []
+        prjs = sb_admin.table("app_projects").select("*").eq("application_id", app_id).order("id").execute().data or []
+    except Exception as e:
+        print(f"[ERROR] PDF generation child table fetch failed: {e}")
+        return jsonify(error=f"Database error fetching research records: {e}"), 503
+
+    try:
+        # Parse JSON fields safely
+        def safe_json(val):
+            if not val:
+                return []
+            if isinstance(val, list):
+                return val
+            try:
+                return json.loads(val)
+            except Exception as e:
+                print(f"[WARN] safe_json parsing failed: {e}")
+                return []
+
+        edu_list = safe_json(app_data.get("education"))
+        admin_pos = safe_json(app_data.get("admin_positions_json"))
+
+        # Generate PDF with ReportLab
+        import io
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.lib.units import inch
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4,
+            rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36
+        )
+
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=14, textColor=colors.HexColor('#002e5b'), alignment=1, spaceAfter=4)
+        subtitle_style = ParagraphStyle('SubTitle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, textColor=colors.HexColor('#334155'), alignment=1, spaceAfter=12)
+        sec_heading = ParagraphStyle('SecHead', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=11, textColor=colors.HexColor('#002e5b'), spaceBefore=10, spaceAfter=4)
+        body_style = ParagraphStyle('Body', parent=styles['Normal'], fontName='Helvetica', fontSize=9, leading=12)
+        table_cell = ParagraphStyle('Cell', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=10)
+        table_cell_bold = ParagraphStyle('CellB', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, leading=10)
+
+        elements = []
+
+        # Title Block
+        elements.append(Paragraph("PSG COLLEGE OF ARTS & SCIENCE", title_style))
+        elements.append(Paragraph(f"FACULTY RECRUITMENT APPLICATION — {app_data.get('app_uuid', '')}", subtitle_style))
+        elements.append(Spacer(1, 8))
+
+        # Personal Details Table
+        personal_data = [
+            [Paragraph("<b>Application Ref No:</b>", table_cell_bold), Paragraph(str(app_data.get('app_uuid', '')), table_cell),
+             Paragraph("<b>Date Submitted:</b>", table_cell_bold), Paragraph(str(app_data.get('submitted_at', '')[:10] if app_data.get('submitted_at') else ''), table_cell)],
+            [Paragraph("<b>Applicant Name:</b>", table_cell_bold), Paragraph(str(app_data.get('name', '')), table_cell),
+             Paragraph("<b>DOB / Gender:</b>", table_cell_bold), Paragraph(f"{app_data.get('dob','')} / {app_data.get('gender','')}", table_cell)],
+            [Paragraph("<b>Position Applied:</b>", table_cell_bold), Paragraph(str(app_data.get('position', '')), table_cell),
+             Paragraph("<b>Department:</b>", table_cell_bold), Paragraph(str(app_data.get('department', '')), table_cell)],
+            [Paragraph("<b>Email:</b>", table_cell_bold), Paragraph(str(app_data.get('email', '')), table_cell),
+             Paragraph("<b>Mobile No:</b>", table_cell_bold), Paragraph(str(app_data.get('mobile_no', '')), table_cell)],
+        ]
+        t_pers = Table(personal_data, colWidths=[1.3*inch, 2.3*inch, 1.3*inch, 2.3*inch])
+        t_pers.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+            ('PADDING', (0,0), (-1,-1), 4),
+        ]))
+        elements.append(t_pers)
+        elements.append(Spacer(1, 10))
+
+        # Educational Qualifications
+        elements.append(Paragraph("Educational Qualifications", sec_heading))
+        edu_headers = [Paragraph("<b>Qualification</b>", table_cell_bold), Paragraph("<b>Degree / Spec</b>", table_cell_bold), Paragraph("<b>Institution</b>", table_cell_bold), Paragraph("<b>% / Year</b>", table_cell_bold), Paragraph("<b>Mode</b>", table_cell_bold)]
+        edu_rows = [edu_headers]
+        if edu_list:
+            for e in edu_list:
+                edu_rows.append([
+                    Paragraph(str(e.get('qualification','')), table_cell),
+                    Paragraph(f"{e.get('degree','')} ({e.get('specialization','')})", table_cell),
+                    Paragraph(str(e.get('college','')), table_cell),
+                    Paragraph(f"{e.get('percentage','')}% / {e.get('year','')}", table_cell),
+                    Paragraph(f"{e.get('rc','')} / {e.get('pf','')}", table_cell),
+                ])
+        else:
+            edu_rows.append([Paragraph("No education records", table_cell)]*5)
+
+        t_edu = Table(edu_rows, colWidths=[1.1*inch, 1.8*inch, 2.2*inch, 1.1*inch, 1.0*inch])
+        t_edu.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#e2e8f0')),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+            ('PADDING', (0,0), (-1,-1), 4),
+        ]))
+        elements.append(t_edu)
+        elements.append(Spacer(1, 10))
+
+        # Publications Section
+        elements.append(Paragraph("Publications", sec_heading))
+        pub_headers = [Paragraph("<b>Type</b>", table_cell_bold), Paragraph("<b>Indexing / Scope</b>", table_cell_bold), Paragraph("<b>Title & Journal/Publisher</b>", table_cell_bold), Paragraph("<b>Year / ISBN / DOI</b>", table_cell_bold)]
+        pub_rows = [pub_headers]
+        if pubs:
+            for p in pubs:
+                idx_scope = f"{p.get('indexing_category','') or ''} ({p.get('scope','')})"
+                info = f"<b>{p.get('title','')}</b><br/>{p.get('publisher_journal','')}"
+                meta = f"Year: {p.get('year','') or 'N/A'}<br/>ISBN: {p.get('isbn_issn','') or '-'}"
+                if p.get('doi_link'):
+                    meta += f"<br/>DOI: {p.get('doi_link')}"
+                pub_rows.append([
+                    Paragraph(str(p.get('type','')), table_cell),
+                    Paragraph(idx_scope, table_cell),
+                    Paragraph(info, table_cell),
+                    Paragraph(meta, table_cell),
+                ])
+        else:
+            pub_rows.append([Paragraph("No publication records submitted.", table_cell)]*4)
+
+        t_pub = Table(pub_rows, colWidths=[1.1*inch, 1.4*inch, 2.8*inch, 1.9*inch])
+        t_pub.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#e2e8f0')),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+            ('PADDING', (0,0), (-1,-1), 4),
+        ]))
+        elements.append(t_pub)
+        elements.append(Spacer(1, 10))
+
+        # Patents & Projects Section
+        elements.append(Paragraph("Patents & Research Projects", sec_heading))
+        pat_text = "<br/>".join([f"• <b>{pt.get('title','')}</b> [{pt.get('status','')}] - No: {pt.get('patent_number','') or 'N/A'} ({pt.get('year','') or ''})" for pt in pats]) or "None"
+        prj_text = "<br/>".join([f"• <b>{pr.get('title','')}</b> [{pr.get('type','')} Project, Role: {pr.get('role','')}] - {pr.get('funding_agency','')} (₹{pr.get('amount','') or 0})" for pr in prjs]) or "None"
+
+        t_pat_prj = Table([[Paragraph("<b>Patents ({})</b><br/>{}".format(len(pats), pat_text), table_cell), Paragraph("<b>Projects ({})</b><br/>{}".format(len(prjs), prj_text), table_cell)]], colWidths=[3.6*inch, 3.6*inch])
+        t_pat_prj.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+            ('PADDING', (0,0), (-1,-1), 5),
+        ]))
+        elements.append(t_pat_prj)
+        elements.append(Spacer(1, 10))
+
+        # Consultancy & Admin Positions
+        elements.append(Paragraph("Consultancy & Administrative Positions", sec_heading))
+        con_text = "<br/>".join([f"• <b>{c.get('title','')}</b> for {c.get('client_organisation','')} (₹{c.get('amount','') or 0}, {c.get('year','') or ''})" for c in cons]) or "None"
+        admin_text = f"ISO Involvement: {'Yes' if app_data.get('iso_involvement') else 'No'} ({app_data.get('iso_details','')})<br/>"
+        admin_text += f"NAAC / IQAC Details: {app_data.get('naac_iqac_details','') or 'None'}<br/>"
+        if admin_pos:
+            admin_text += "<br/><b>Positions Held:</b><br/>" + "<br/>".join([f"• {pos.get('position','')} - {pos.get('institution','')} ({pos.get('duration','')})" for pos in admin_pos])
+
+        t_con_admin = Table([[Paragraph("<b>Consultancy ({})</b><br/>{}".format(len(cons), con_text), table_cell), Paragraph("<b>Quality & Admin Roles</b><br/>{}".format(admin_text), table_cell)]], colWidths=[3.6*inch, 3.6*inch])
+        t_con_admin.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+            ('PADDING', (0,0), (-1,-1), 5),
+        ]))
+        elements.append(t_con_admin)
+        elements.append(Spacer(1, 15))
+
+        # Declaration Footer
+        elements.append(Paragraph("<b>Declaration:</b> I hereby declare that the information furnished above is true and correct to the best of my knowledge.", ParagraphStyle('Decl', parent=body_style, fontSize=8, textColor=colors.HexColor('#475569'))))
+
+        doc.build(elements)
+        buffer.seek(0)
+
+        from flask import Response
+        app_uuid = str(app_data.get("app_uuid", "REC")).replace("/", "_")
+        return Response(
+            buffer.getvalue(),
+            mimetype="application/pdf",
+            headers={"Content-Disposition": f"inline; filename=PSGCAS_{app_uuid}_Biodata.pdf"},
+        )
+
+    except Exception as e:
+        print(f"[PDF Error] {e}")
+        return jsonify(error=f"PDF generation failed: {e}"), 500
+
+
+# ═════════════════════════════════════════════
+# STATS & UTILITY ROUTES
+# ═════════════════════════════════════════════
+
+@app.route("/api/stats", methods=["GET"])
+@auth_required
+def get_stats():
+    """Dashboard stats, scoped by role."""
+    role = g.current_user["role"]
+
+    try:
+        query = sb_admin.table("applications").select("id, position, submitted_at, hod_status, vp_status, department")
+
+        if role == "hod":
+            query = query.eq("department", g.current_user["department"])
+        elif role == "hr":
+            query = query.eq("vp_status", "Shortlisted")
+        elif role == "candidate":
+            query = query.eq("user_id", g.current_user["id"])
+
+        res = query.execute()
+        apps = res.data or []
+
+        total = len(apps)
+        ra = sum(1 for a in apps if "Research" in (a.get("position") or ""))
+        ta = sum(1 for a in apps if "Teaching" in (a.get("position") or ""))
+        today = datetime.now().strftime("%Y-%m-%d")
+        tod = sum(1 for a in apps if (a.get("submitted_at") or "").startswith(today))
+        eligible = sum(1 for a in apps if a.get("hod_status") == "Eligible")
+        shortlisted = sum(1 for a in apps if a.get("vp_status") == "Shortlisted")
+
+        # Department breakdown
+        dept_counts = {}
+        for a in apps:
+            d = a.get("department") or "Unknown"
+            dept_counts[d] = dept_counts.get(d, 0) + 1
+        by_department = sorted(
+            [{"department": k, "cnt": v} for k, v in dept_counts.items()],
+            key=lambda x: -x["cnt"]
+        )[:10]
+
+        return jsonify(
+            total=total,
+            research_assistant=ra,
+            teaching_assistant=ta,
+            today=tod,
+            eligible=eligible,
+            shortlisted=shortlisted,
+            by_department=by_department,
+        )
+    except Exception as e:
+        print(f"[Stats Error] {e}")
+        return jsonify(total=0, research_assistant=0, teaching_assistant=0, today=0, eligible=0, shortlisted=0, by_department=[])
+
+
 @app.route("/api/departments", methods=["GET"])
-@token_required
+@auth_required
 def get_departments():
-    db   = get_db()
-    rows = db.execute("SELECT DISTINCT department FROM applications WHERE department IS NOT NULL ORDER BY department").fetchall()
-    return jsonify(departments=[r[0] for r in rows])
+    """List distinct departments."""
+    try:
+        res = sb_admin.table("applications").select("department").execute()
+        depts = sorted(set(a["department"] for a in (res.data or []) if a.get("department")))
+        return jsonify(departments=depts)
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch departments: {e}")
+        return jsonify(error=f"Database error fetching departments: {e}"), 503
 
 
 @app.route("/api/export/csv", methods=["GET"])
-@token_required
+@role_required("admin", "superadmin")
 def export_csv():
-    """Stream all applications as CSV."""
-    import io, csv
-    db   = get_db()
-    rows = db.execute("SELECT * FROM applications ORDER BY submitted_at DESC").fetchall()
+    """Stream applications as CSV (admin/VP only)."""
+    import io
+    import csv
+
+    try:
+        res = sb_admin.table("applications").select("*").order("submitted_at", desc=True).execute()
+        rows = res.data or []
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch export data: {e}")
+        return jsonify(error=f"Database error fetching export data: {e}"), 503
+
     if not rows:
         return jsonify(error="No data"), 404
 
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=rows[0].keys())
     writer.writeheader()
-    writer.writerows([dict(r) for r in rows])
+    writer.writerows(rows)
 
     from flask import Response
     return Response(
         output.getvalue(),
         mimetype="text/csv",
-        headers={"Content-Disposition": "attachment;filename=psgcas_applications.csv"}
+        headers={"Content-Disposition": "attachment;filename=psgcas_applications.csv"},
     )
 
 
-# Auto-init DB on startup so tables and admin seeds are ready under Gunicorn/Render
-try:
-    init_db()
-except Exception as _e:
-    print("[WARN] init_db startup note:", _e)
+# ═════════════════════════════════════════════
+# ADMIN: USER MANAGEMENT
+# ═════════════════════════════════════════════
+
+@app.route("/api/admin/users", methods=["GET"])
+@role_required("admin")
+def list_users():
+    """List all staff users (non-candidate profiles)."""
+    try:
+        res = sb_admin.table("profiles").select("*").neq("role", "candidate").order("created_at", desc=True).execute()
+        return jsonify(users=res.data or [])
+    except Exception as e:
+        return jsonify(users=[], error=str(e))
 
 
-# ─────────────────────────────────────────────
-# STATIC FILES (serve the front-end HTML pages)
-# ─────────────────────────────────────────────
+@app.route("/api/admin/users", methods=["POST"])
+@role_required("admin")
+def create_user():
+    """Admin creates a new staff user (HOD, VP, HR)."""
+    data = request.get_json(force=True)
+    email = (data.get("email") or "").strip().lower()
+    password = (data.get("password") or "").strip()
+    role = (data.get("role") or "").strip()
+    full_name = (data.get("full_name") or "").strip()
+    department = (data.get("department") or "").strip() or None
+
+    if not email or not password or not full_name:
+        return jsonify(error="Email, password, and full name are required"), 400
+
+    if role not in ("hod", "superadmin", "hr", "admin"):
+        return jsonify(error="Invalid role. Must be hod, superadmin, hr, or admin."), 400
+
+    if role == "hod" and not department:
+        return jsonify(error="HOD must have a department assigned"), 400
+
+    if len(password) < 8:
+        return jsonify(error="Password must be at least 8 characters"), 400
+
+    try:
+        res = sb_admin.auth.admin.create_user({
+            "email": email,
+            "password": password,
+            "email_confirm": True,
+            "user_metadata": {
+                "role": role,
+                "full_name": full_name,
+                "department": department,
+            },
+        })
+        user_id = str(res.user.id)
+
+        # Ensure profile exists with correct data
+        sb_admin.table("profiles").upsert({
+            "id": user_id,
+            "email": email,
+            "role": role,
+            "full_name": full_name,
+            "department": department,
+        }).execute()
+
+        return jsonify(success=True, id=user_id, email=email, role=role), 201
+
+    except Exception as e:
+        err = str(e)
+        if "already been registered" in err or "duplicate" in err.lower():
+            return jsonify(error="A user with this email already exists"), 409
+        return jsonify(error=str(e)), 500
+
+
+@app.route("/api/admin/users/<user_id>", methods=["DELETE"])
+@role_required("admin")
+def delete_user(user_id):
+    """Admin deletes a staff user."""
+    # Don't allow deleting yourself
+    if user_id == g.current_user["id"]:
+        return jsonify(error="Cannot delete your own account"), 400
+
+    try:
+        sb_admin.auth.admin.delete_user(user_id)
+        # Profile is deleted via CASCADE
+        return jsonify(success=True)
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+
+# ═════════════════════════════════════════════
+# ADMIN: APPLICATION SETTINGS
+# ═════════════════════════════════════════════
+
+@app.route("/api/settings", methods=["GET"])
+def get_settings():
+    """Public: get application settings (returns ONLY open_date, close_date, state, state_message)."""
+    state, msg, is_err = _get_application_window_state()
+    if is_err:
+        return jsonify(error=f"Failed to load settings: {msg}"), 503
+
+    try:
+        res = sb_admin.table("app_settings").select("key, value").execute()
+        settings_map = {row["key"]: row["value"] for row in (res.data or [])}
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch settings: {e}")
+        return jsonify(error=f"Database error loading settings: {e}"), 503
+
+    return jsonify(
+        open_date=settings_map.get("open_date"),
+        close_date=settings_map.get("close_date"),
+        state=state,
+        state_message=msg,
+    )
+
+
+@app.route("/api/admin/settings", methods=["PUT"])
+@role_required("admin")
+def update_settings():
+    """Admin: update application settings (open_date, close_date, applications_open, etc.)."""
+    data = request.get_json(force=True)
+    allowed_keys = {"open_date", "close_date", "applications_open", "deadline_date", "announcement_text"}
+    results = []
+
+    for key, value in data.items():
+        if key not in allowed_keys:
+            continue
+        try:
+            sb_admin.table("app_settings").upsert({
+                "key": key,
+                "value": str(value) if value is not None else "",
+                "updated_at": datetime.now().isoformat(),
+            }).execute()
+            results.append(key)
+        except Exception as e:
+            print(f"[ERROR] Settings update failed for key '{key}': {e}")
+            return jsonify(error=f"Failed to update setting '{key}': {e}"), 503
+
+    return jsonify(success=True, updated=results)
+
+
+# ═════════════════════════════════════════════
+# STATIC FILES
+# ═════════════════════════════════════════════
+
 @app.route("/uploads/<path:filename>")
 def serve_upload(filename):
     return send_from_directory(UPLOAD_DIR, filename)
+
+
+# Role-to-page mapping for access control
+ROLE_PAGES = {
+    "candidate.html": {"candidate"},
+    "hod.html": {"hod"},
+    "vp.html": {"superadmin"},
+    "hr.html": {"hr"},
+    "admin.html": {"admin"},
+}
 
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_static(path):
     if path:
-        # Security: block path traversal & access to sensitive server files
         clean_path = os.path.normpath(path).replace("\\", "/")
         lowered = clean_path.lower()
+
+        # Block sensitive files
         if (
             lowered.startswith("database")
             or lowered.startswith(".")
-            or lowered == "app.py"
             or lowered.endswith(".py")
             or lowered.endswith(".db")
             or lowered.endswith(".bat")
             or lowered == "procfile"
             or lowered == "requirements.txt"
+            or lowered.endswith(".env")
+            or lowered == ".env.example"
         ):
             return jsonify(error="Access denied"), 403
 
         file_path = os.path.join(BASE_DIR, clean_path)
         if os.path.isfile(file_path):
             return send_from_directory(BASE_DIR, clean_path)
+
     return send_from_directory(BASE_DIR, "index.html")
 
 
-# ─────────────────────────────────────────────
+# ═════════════════════════════════════════════
 # MAIN
-# ─────────────────────────────────────────────
+# ═════════════════════════════════════════════
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    print(f"PSG CAS Careers Portal running on http://localhost:{port}")
+    print(f"PSG CAS CONNECT running on http://localhost:{port}")
     app.run(host="0.0.0.0", port=port, debug=True)

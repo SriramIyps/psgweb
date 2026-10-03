@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PSG CAS — Candidate Portal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    :root { --maroon:#7b1c1c; --maroon-dark:#5c1414; }
+    *, ::before, ::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "Inter", system-ui, sans-serif; background: #f1f5f9; color: #0f172a; min-height: 100vh; }
+    a { color: inherit; text-decoration: none; }
+    .topbar { background: #1e293b; padding: .875rem 1.5rem; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 40; }
+    .topbar-left { display: flex; align-items: center; gap: .875rem; }
+    .topbar-left img { height: 42px; border-radius: .375rem; }
+    .topbar-brand { color: #fff; font-size: .9375rem; font-weight: 600; }
+    .topbar-brand span { color: #818cf8; }
+    .topbar-right { display: flex; align-items: center; gap: 1rem; }
+    .role-badge { font-size: .72rem; font-weight: 700; padding: .25rem .75rem; border-radius: 9999px; background: #dbeafe; color: #1e40af; }
+    .user-info { font-size: .8125rem; color: #94a3b8; }
+    .btn-logout { font-size: .8125rem; padding: .375rem .875rem; border-radius: .375rem; background: #ef4444; color: #fff; border: none; cursor: pointer; }
+    .btn-logout:hover { background: #dc2626; }
+    .main { max-width: 900px; margin: 0 auto; padding: 2rem; }
+    .page-title { font-size: 1.375rem; font-weight: 700; margin-bottom: .25rem; }
+    .page-sub { font-size: .875rem; color: #475569; margin-bottom: 1.5rem; }
+    .welcome-card { background: #fff; border-radius: .875rem; border: 1px solid #e2e8f0; padding: 2rem; margin-bottom: 1.5rem; }
+    .welcome-card h2 { font-size: 1.125rem; font-weight: 700; margin-bottom: .5rem; }
+    .welcome-card p { font-size: .875rem; color: #475569; }
+    .app-card { background: #fff; border-radius: .875rem; border: 1px solid #e2e8f0; padding: 1.5rem; margin-bottom: 1rem; transition: box-shadow .15s; }
+    .app-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.06); }
+    .app-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; flex-wrap: wrap; gap: .5rem; }
+    .app-ref { font-size: .72rem; color: #94a3b8; font-weight: 600; letter-spacing: .05em; }
+    .app-position { font-size: 1rem; font-weight: 700; }
+    .app-dept { font-size: .8125rem; color: #475569; }
+    .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: .75rem; margin-top: .75rem; }
+    .status-item { background: #f8fafc; border-radius: .5rem; padding: .75rem; }
+    .status-item label { display: block; font-size: .66rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .25rem; }
+    .status-item .val { font-size: .875rem; font-weight: 600; }
+    .badge { display: inline-block; font-size: .7rem; font-weight: 600; padding: .15rem .5rem; border-radius: 9999px; }
+    .b-pending { background: #fef9c3; color: #854d0e; }
+    .b-eligible { background: #d1fae5; color: #065f46; }
+    .b-not-eligible { background: #fce7f3; color: #831843; }
+    .b-shortlisted { background: #dbeafe; color: #1e40af; }
+    .b-not-shortlisted { background: #fce7f3; color: #831843; }
+    .app-date { font-size: .75rem; color: #94a3b8; margin-top: .75rem; }
+    .no-apps { text-align: center; padding: 4rem 2rem; color: #94a3b8; }
+    .no-apps i { font-size: 3rem; margin-bottom: 1rem; display: block; }
+    .btn-apply { display: inline-flex; align-items: center; gap: .5rem; padding: .75rem 1.5rem; background: linear-gradient(135deg, #7b1c1c, #a83232); color: #fff; border: none; border-radius: .75rem; font-size: .875rem; font-weight: 600; cursor: pointer; text-decoration: none; margin-top: 1rem; }
+    .btn-apply:hover { opacity: .9; }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <img src="assets/psgcas logo-2.png" alt="PSG CAS">
+    <span class="topbar-brand">PSG CAS <span>Candidate Portal</span></span>
+  </div>
+  <div class="topbar-right">
+    <span class="role-badge">Candidate</span>
+    <span class="user-info" id="user-info">…</span>
+    <button class="btn-logout" id="btn-logout">Sign Out</button>
+  </div>
+</div>
+
+<main class="main">
+  <div class="welcome-card">
+    <h2 id="welcome-name">Welcome!</h2>
+    <p>Track your application status below. You can also submit a new application.</p>
+    <a href="apply.html" class="btn-apply"><i class="fa-solid fa-plus"></i> Submit New Application</a>
+  </div>
+
+  <p class="page-title">My Applications</p>
+  <p class="page-sub">Applications linked to your account.</p>
+
+  <div id="apps-wrap"></div>
+</main>
+
+<script>
+  // ── AUTH GUARD ──
+  var token = sessionStorage.getItem('psg_token');
+  var role  = sessionStorage.getItem('psg_role');
+  if (!token || role !== 'candidate') { window.location.href = 'login.html'; }
+
+  document.getElementById('user-info').textContent = sessionStorage.getItem('psg_email');
+  document.getElementById('welcome-name').textContent = 'Welcome, ' + (sessionStorage.getItem('psg_name') || 'Candidate') + '!';
+
+  document.getElementById('btn-logout').addEventListener('click', function() {
+    sessionStorage.clear(); window.location.href = 'login.html';
+  });
+
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function badgeClass(status) {
+    var map = {'Pending':'b-pending','Eligible':'b-eligible','Not Eligible':'b-not-eligible','Shortlisted':'b-shortlisted','Not Shortlisted':'b-not-shortlisted'};
+    return map[status] || 'b-pending';
+  }
+
+  async function loadApps() {
+    var wrap = document.getElementById('apps-wrap');
+    try {
+      var res = await fetch('/api/applications', {
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+      });
+      if (res.status === 401) { sessionStorage.clear(); window.location.href = 'login.html'; return; }
+      var data = await res.json();
+      var apps = data.applications || [];
+
+      if (!apps.length) {
+        wrap.innerHTML = '<div class="no-apps"><i class="fa-solid fa-file-circle-plus"></i>No applications yet.<br><a href="apply.html" class="btn-apply" style="margin-top:1.5rem;"><i class="fa-solid fa-plus"></i> Submit Your First Application</a></div>';
+        return;
+      }
+
+      var html = '';
+      apps.forEach(function(a) {
+        var date = a.submitted_at ? new Date(a.submitted_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+        html += '<div class="app-card">';
+        html += '<div class="app-header"><div><div class="app-ref">' + esc(a.app_uuid||'') + '</div><div class="app-position">' + esc(a.position||'—') + '</div><div class="app-dept">' + esc(a.department||'—') + '</div></div></div>';
+        html += '<div class="status-grid">';
+        html += '<div class="status-item"><label>HOD Review</label><div class="val"><span class="badge ' + badgeClass(a.hod_status) + '">' + esc(a.hod_status||'Pending') + '</span></div></div>';
+        html += '<div class="status-item"><label>VP Review</label><div class="val"><span class="badge ' + badgeClass(a.vp_status) + '">' + esc(a.vp_status||'Pending') + '</span></div></div>';
+        html += '<div class="status-item"><label>Overall</label><div class="val"><span class="badge ' + badgeClass(a.status) + '">' + esc(a.status||'Pending') + '</span></div></div>';
+        html += '</div>';
+        html += '<div class="app-date">Submitted: ' + date + '</div>';
+        html += '<div style="margin-top:1rem; display:flex; gap:.5rem;">';
+        html += '<button onclick="downloadPdf(' + a.id + ')" style="padding:.4rem .85rem; background:#002e5b; color:#fff; border:none; border-radius:.5rem; font-size:.8rem; font-weight:600; cursor:pointer;"><i class="fa-solid fa-file-pdf"></i> Download Biodata PDF</button>';
+        html += '<button onclick="viewResearch(' + a.id + ')" style="padding:.4rem .85rem; background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; border-radius:.5rem; font-size:.8rem; font-weight:600; cursor:pointer;"><i class="fa-solid fa-microscope"></i> View Research Data</button>';
+        html += '</div>';
+        html += '</div>';
+      });
+      wrap.innerHTML = html;
+    } catch(e) { wrap.innerHTML = '<div class="no-apps">Error loading applications.</div>'; }
+  }
+
+  async function downloadPdf(id) {
+    try {
+      var res = await fetch('/api/applications/' + id + '/pdf', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!res.ok) { alert('PDF download failed.'); return; }
+      var blob = await res.blob();
+      var url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch(e) { alert('Error downloading PDF.'); }
+  }
+
+  async function viewResearch(id) {
+    try {
+      var res = await fetch('/api/applications/' + id + '/research', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!res.ok) { alert('Failed to load research data'); return; }
+      var data = await res.json();
+      var c = data.counts || {};
+      var msg = '📊 Your Research Summary:\n'
+        + '• SCI Papers: ' + (c.sci||0) + '\n'
+        + '• Scopus Papers: ' + (c.scopus||0) + '\n'
+        + '• UGC/Other Papers: ' + (c.ugc_other||0) + '\n'
+        + '• Books & Chapters: ' + ((c.books||0)+(c.chapters||0)) + '\n'
+        + '• Patents: ' + ((c.patents_published||0)+(c.patents_granted||0)) + '\n'
+        + '• Projects: ' + ((c.projects_major||0)+(c.projects_minor||0)) + '\n'
+        + '• Consultancy Total: ₹' + (c.consultancy_total||0);
+      alert(msg);
+    } catch(e) { alert('Error loading research data.'); }
+  }
+
+  loadApps();
+</script>
+</body>
+</html>
+

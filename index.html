@@ -244,12 +244,12 @@
 
       <!-- Admin Login button (Desktop) -->
       <div class="hidden sm:flex items-center gap-2">
-        <button class="btn-admin-nav" id="open-login">Admin Login</button>
+        <a href="login.html" class="btn-admin-nav">Staff Login</a>
       </div>
 
       <!-- Mobile: hamburger -->
       <div class="flex items-center gap-2 sm:hidden">
-        <button class="btn-admin-nav" id="open-login-mobile" style="font-size:.75rem;padding:.375rem .75rem;">Admin</button>
+        <a href="login.html" class="btn-admin-nav" style="font-size:.75rem;padding:.375rem .75rem;text-decoration:none;">Staff Login</a>
         <button id="mobile-menu-toggle" type="button" style="display:inline-flex;align-items:center;justify-content:center;border-radius:.375rem;padding:.375rem;border:1px solid #cbd5e1;color:#334155;background:none;" aria-label="Open navigation menu">
           <svg style="height:1.25rem;width:1.25rem;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
@@ -394,103 +394,6 @@
 
 </main>
 
-<!-- ── ADMIN LOGIN MODAL ── -->
-<div class="modal-overlay" id="login-modal">
-  <div class="modal-box">
-    <button class="modal-close" id="close-modal">&times;</button>
-    <div class="modal-logo">
-      <img src="assets/psgcas logo-2.png" alt="PSG CAS">
-      <div>
-        <div class="modal-logo-brand">PSG College of Arts &amp; Science</div>
-        <div class="modal-logo-sub">Careers Admin Portal</div>
-      </div>
-    </div>
-    <h2 class="modal-title">Admin Sign In</h2>
-    <p class="modal-sub">Enter your credentials to access the admin portal.</p>
-    <div id="login-error" class="error-msg"></div>
-    <form id="login-form" autocomplete="on">
-      <div class="form-group">
-        <label class="form-label" for="admin-email">Email Address</label>
-        <input class="form-input" type="email" id="admin-email" name="email" autocomplete="email" placeholder="admin@psgcas.ac.in" required>
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="admin-password">Password</label>
-        <input class="form-input" type="password" id="admin-password" name="password" autocomplete="current-password" placeholder="••••••••" required>
-      </div>
-      <button class="btn-login" type="submit" id="btn-login-submit">Sign In</button>
-    </form>
-    <div class="login-hint">
-      <strong>Viewer:</strong> viewer@psgcas.ac.in / view123&nbsp;&nbsp;
-      <strong>Editor:</strong> editor@psgcas.ac.in / edit123
-    </div>
-  </div>
-</div>
-
-<script>
-  // Open modal
-  ['open-login','open-login-mobile'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('click', () => {
-      document.getElementById('login-modal').classList.add('active');
-      document.getElementById('admin-email').focus();
-    });
-  });
-
-  // Close modal
-  document.getElementById('close-modal').addEventListener('click', () => {
-    document.getElementById('login-modal').classList.remove('active');
-  });
-  document.getElementById('login-modal').addEventListener('click', e => {
-    if (e.target === e.currentTarget) e.currentTarget.classList.remove('active');
-  });
-
-  // Login form → real API
-  document.getElementById('login-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const email    = document.getElementById('admin-email').value.trim();
-    const password = document.getElementById('admin-password').value.trim();
-    const errDiv   = document.getElementById('login-error');
-    const btn      = document.getElementById('btn-login-submit');
-
-    errDiv.style.display = 'none';
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Signing in…';
-
-    try {
-      const res  = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        errDiv.textContent   = data.error || 'Login failed. Please try again.';
-        errDiv.style.display = 'block';
-        btn.disabled = false;
-        btn.textContent = 'Sign In';
-        return;
-      }
-
-      sessionStorage.setItem('psg_token', data.token);
-      sessionStorage.setItem('psg_role',  data.role);
-      sessionStorage.setItem('psg_email', data.email);
-      sessionStorage.setItem('psg_name',  data.name);
-
-      btn.innerHTML = '&#10003; Redirecting…';
-      if (data.role === 'secretary' || data.role === 'viewer') {
-        window.location.href = 'secretary.html';
-      } else {
-        window.location.href = 'vp.html';
-      }
-
-    } catch (err) {
-      errDiv.textContent   = 'Cannot connect to server. Is the server running?';
-      errDiv.style.display = 'block';
-      btn.disabled = false;
-      btn.textContent = 'Sign In';
-    }
-  });
-</script>
+<!-- Staff login moved to login.html — no inline credentials -->
 </body>
 </html>
