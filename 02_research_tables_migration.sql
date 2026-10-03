@@ -461,11 +461,23 @@ DO $$
 DECLARE
     app_rec RECORD;
     i INT;
+    v_sci INT;
+    v_scopus INT;
+    v_ugc INT;
+    v_patents INT;
+    v_projects INT;
 BEGIN
-    FOR app_rec IN SELECT * FROM public.applications LOOP
+    FOR app_rec IN SELECT id, sci, scopus, ugc, patents_granted, major_projects FROM public.applications LOOP
+        -- Safe numeric extraction: convert strictly 1-2 digit numbers ('^[0-9]{1,2}$'), treat anything else as 0
+        v_sci      := CASE WHEN app_rec.sci IS NOT NULL AND TRIM(app_rec.sci) ~ '^[0-9]{1,2}$' THEN TRIM(app_rec.sci)::INT ELSE 0 END;
+        v_scopus   := CASE WHEN app_rec.scopus IS NOT NULL AND TRIM(app_rec.scopus) ~ '^[0-9]{1,2}$' THEN TRIM(app_rec.scopus)::INT ELSE 0 END;
+        v_ugc      := CASE WHEN app_rec.ugc IS NOT NULL AND TRIM(app_rec.ugc) ~ '^[0-9]{1,2}$' THEN TRIM(app_rec.ugc)::INT ELSE 0 END;
+        v_patents  := CASE WHEN app_rec.patents_granted IS NOT NULL AND TRIM(app_rec.patents_granted) ~ '^[0-9]{1,2}$' THEN TRIM(app_rec.patents_granted)::INT ELSE 0 END;
+        v_projects := CASE WHEN app_rec.major_projects IS NOT NULL AND TRIM(app_rec.major_projects) ~ '^[0-9]{1,2}$' THEN TRIM(app_rec.major_projects)::INT ELSE 0 END;
+
         -- Migrate SCI count
-        IF COALESCE(app_rec.sci::INT, 0) > 0 THEN
-            FOR i IN 1..app_rec.sci::INT LOOP
+        IF v_sci > 0 THEN
+            FOR i IN 1..v_sci LOOP
                 INSERT INTO public.app_publications (
                     application_id, type, scope, indexing_category, title, publisher_journal, additional_details
                 )
@@ -477,8 +489,8 @@ BEGIN
         END IF;
 
         -- Migrate Scopus count
-        IF COALESCE(app_rec.scopus::INT, 0) > 0 THEN
-            FOR i IN 1..app_rec.scopus::INT LOOP
+        IF v_scopus > 0 THEN
+            FOR i IN 1..v_scopus LOOP
                 INSERT INTO public.app_publications (
                     application_id, type, scope, indexing_category, title, publisher_journal, additional_details
                 )
@@ -490,8 +502,8 @@ BEGIN
         END IF;
 
         -- Migrate UGC count
-        IF COALESCE(app_rec.ugc::INT, 0) > 0 THEN
-            FOR i IN 1..app_rec.ugc::INT LOOP
+        IF v_ugc > 0 THEN
+            FOR i IN 1..v_ugc LOOP
                 INSERT INTO public.app_publications (
                     application_id, type, scope, indexing_category, title, publisher_journal, additional_details
                 )
@@ -503,8 +515,8 @@ BEGIN
         END IF;
 
         -- Migrate Patents Granted count
-        IF COALESCE(app_rec.patents_granted::INT, 0) > 0 THEN
-            FOR i IN 1..app_rec.patents_granted::INT LOOP
+        IF v_patents > 0 THEN
+            FOR i IN 1..v_patents LOOP
                 INSERT INTO public.app_patents (
                     application_id, title, status, patent_number, additional_details
                 )
@@ -516,8 +528,8 @@ BEGIN
         END IF;
 
         -- Migrate Major Projects count
-        IF COALESCE(app_rec.major_projects::INT, 0) > 0 THEN
-            FOR i IN 1..app_rec.major_projects::INT LOOP
+        IF v_projects > 0 THEN
+            FOR i IN 1..v_projects LOOP
                 INSERT INTO public.app_projects (
                     application_id, title, funding_agency, type, role, additional_details
                 )
