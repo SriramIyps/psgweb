@@ -106,10 +106,25 @@ CREATE OR REPLACE FUNCTION public.rpc_update_hod_status(
 ) RETURNS VOID AS $$
 DECLARE
     v_old_status TEXT;
+    v_vp_status TEXT;
 BEGIN
-    SELECT hod_status INTO v_old_status FROM public.applications WHERE id = p_app_id FOR UPDATE;
+    SELECT hod_status, vp_status
+    INTO v_old_status, v_vp_status
+    FROM public.applications
+    WHERE id = p_app_id FOR UPDATE;
+
     IF v_old_status IS NULL THEN
         RAISE EXCEPTION 'Application with ID % not found', p_app_id;
+    END IF;
+
+    -- Rule 1: HOD decision cannot be changed once VP has acted
+    IF v_vp_status IS NOT NULL AND v_vp_status != 'Pending' THEN
+        RAISE EXCEPTION 'Cannot modify HOD decision after VP review has been completed';
+    END IF;
+
+    -- Rule 2: Remarks/reason is mandatory when marking Not Eligible
+    IF p_status = 'Not Eligible' AND (p_remarks IS NULL OR TRIM(p_remarks) = '') THEN
+        RAISE EXCEPTION 'Remarks/reason is mandatory when marking a candidate Not Eligible';
     END IF;
 
     UPDATE public.applications
@@ -134,10 +149,25 @@ CREATE OR REPLACE FUNCTION public.rpc_update_vp_status(
 ) RETURNS VOID AS $$
 DECLARE
     v_old_status TEXT;
+    v_hod_status TEXT;
 BEGIN
-    SELECT vp_status INTO v_old_status FROM public.applications WHERE id = p_app_id FOR UPDATE;
-    IF v_old_status IS NULL THEN
+    SELECT hod_status, vp_status
+    INTO v_hod_status, v_old_status
+    FROM public.applications
+    WHERE id = p_app_id FOR UPDATE;
+
+    IF v_old_status IS NULL AND v_hod_status IS NULL THEN
         RAISE EXCEPTION 'Application with ID % not found', p_app_id;
+    END IF;
+
+    -- Rule 1: Candidate must be Eligible by HOD before VP can act
+    IF v_hod_status IS NULL OR v_hod_status != 'Eligible' THEN
+        RAISE EXCEPTION 'Cannot shortlist: candidate has not been marked Eligible by HOD';
+    END IF;
+
+    -- Rule 2: Remarks/reason is mandatory when marking Not Shortlisted
+    IF p_status = 'Not Shortlisted' AND (p_remarks IS NULL OR TRIM(p_remarks) = '') THEN
+        RAISE EXCEPTION 'Remarks/reason is mandatory when marking a candidate Not Shortlisted';
     END IF;
 
     UPDATE public.applications

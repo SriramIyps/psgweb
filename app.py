@@ -649,6 +649,9 @@ def hod_review(app_id):
         }).execute()
         return jsonify(success=True, hod_status=new_status)
     except Exception as e:
+        err_msg = str(e)
+        if any(term in err_msg.lower() for term in ["mandatory", "cannot modify", "not found"]):
+            return jsonify(error=err_msg), 400
         print(f"[ERROR] HOD review update failed: {e}")
         return jsonify(error=f"Failed to update HOD review: {e}"), 503
 
@@ -666,17 +669,6 @@ def vp_review(app_id):
     if new_status not in ("Shortlisted", "Not Shortlisted"):
         return jsonify(error="vp_status must be 'Shortlisted' or 'Not Shortlisted'"), 400
 
-    # Check that the candidate is Eligible
-    try:
-        app_res = sb_admin.table("applications").select("hod_status, vp_status").eq("id", app_id).limit(1).execute()
-        if not app_res.data:
-            return jsonify(error="Application not found"), 404
-        if app_res.data[0]["hod_status"] != "Eligible":
-            return jsonify(error="Cannot shortlist: candidate has not been marked Eligible by HOD"), 403
-    except Exception as e:
-        print(f"[ERROR] VP review eligibility check failed: {e}")
-        return jsonify(error=f"Database error checking eligibility: {e}"), 503
-
     try:
         sb_admin.rpc("rpc_update_vp_status", {
             "p_app_id": app_id,
@@ -686,6 +678,9 @@ def vp_review(app_id):
         }).execute()
         return jsonify(success=True, vp_status=new_status)
     except Exception as e:
+        err_msg = str(e)
+        if any(term in err_msg.lower() for term in ["cannot shortlist", "mandatory", "not found"]):
+            return jsonify(error=err_msg), 400
         print(f"[ERROR] VP review update failed: {e}")
         return jsonify(error=f"Failed to update VP review: {e}"), 503
 
