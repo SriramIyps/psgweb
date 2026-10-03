@@ -29,13 +29,13 @@ def run_tests():
             self._data = data
             self._raise_exc = raise_exc
 
-        def select(self, *a): return self
-        def eq(self, *a): return self
-        def order(self, *a): return self
-        def limit(self, *a): return self
-        def single(self): return self
-        def update(self, *a): return self
-        def insert(self, *a): return self
+        def select(self, *a, **kw): return self
+        def eq(self, *a, **kw): return self
+        def order(self, *a, **kw): return self
+        def limit(self, *a, **kw): return self
+        def single(self, *a, **kw): return self
+        def update(self, *a, **kw): return self
+        def insert(self, *a, **kw): return self
         def execute(self):
             if self._raise_exc:
                 raise Exception("Simulated DB connection failure")
@@ -718,8 +718,199 @@ def run_tests():
     except Exception as e:
         print(f"[FAIL] Test 20: {e}")
 
+    # ── TEST 21: HOD Scrutiny GET /api/hod/applications returns department applications ──
+    try:
+        app_module._get_user_from_token = lambda: {
+            "id": "hod-123", "role": "hod", "department": "Computer Science", "full_name": "Dr. CS HOD"
+        }
+        class MockAdminHOD:
+            def table(self, name):
+                if name == "app_settings":
+                    return MockQuery([{"key": "close_date", "value": "2020-01-01"}])
+                return MockQuery([
+                    {"id": 1, "app_uuid": "CS/001", "name": "Cand 1", "department": "Computer Science", "is_locked": True, "hod_status": "Eligible"},
+                    {"id": 2, "app_uuid": "CS/002", "name": "Cand 2", "department": "Computer Science", "is_locked": True, "hod_status": "Not Eligible", "hod_remarks": "Not qualified"}
+                ])
+
+        app_module.sb_admin = MockAdminHOD()
+
+        res = client.get('/api/hod/applications', headers={"Authorization": "Bearer fake-jwt"})
+        assert res.status_code == 200, f"Expected 200, got {res.status_code}"
+        data = json.loads(res.data)
+        assert data["department"] == "Computer Science"
+        assert len(data["applications"]) == 2
+        assert data["stats"]["total_submitted"] == 2
+        print("[PASS] Test 21: HOD Scrutiny GET /api/hod/applications returned department applications & stats.")
+        passed += 1
+    except Exception as e:
+        print(f"[FAIL] Test 21: {e}")
+
+    # ── TEST 22: HOD Forward POST /api/hod/forward calls RPC ──
+    try:
+        app_module._get_user_from_token = lambda: {
+            "id": "hod-123", "role": "hod", "department": "Computer Science", "full_name": "Dr. CS HOD", "email": "hod.cs@psgcas.ac.in"
+        }
+        class MockAdminHODForward:
+            def rpc(self, name, params):
+                assert name == "rpc_hod_forward_department"
+                assert params["p_department"] == "Computer Science"
+                assert params["p_who"] == "hod.cs@psgcas.ac.in"
+                return MockRPC(True)
+
+        app_module.sb_admin = MockAdminHODForward()
+
+        res = client.post('/api/hod/forward', headers={"Authorization": "Bearer fake-jwt"})
+        assert res.status_code == 200, f"Expected 200, got {res.status_code}"
+        data = json.loads(res.data)
+        assert data["success"] is True
+        print("[PASS] Test 22: HOD Forward POST /api/hod/forward invoked RPC successfully.")
+        passed += 1
+    except Exception as e:
+        print(f"[FAIL] Test 22: {e}")
+
+    # ── TEST 23: VP Departments GET /api/vp/departments returns status list ──
+    try:
+        app_module._get_user_from_token = lambda: {
+            "id": "vp-123", "role": "superadmin", "department": None, "full_name": "Vice Principal"
+        }
+        class MockAdminVP:
+            def table(self, name):
+                return MockQuery([
+                    {"department": "Computer Science", "hod_forwarded_at": "2026-10-03T10:00:00", "hod_forwarded_by": "hod.cs@psgcas.ac.in", "hod_status": "Eligible"},
+                    {"department": "Mathematics", "hod_forwarded_at": None, "hod_forwarded_by": None, "hod_status": "Pending"}
+                ])
+
+        app_module.sb_admin = MockAdminVP()
+
+        res = client.get('/api/vp/departments', headers={"Authorization": "Bearer fake-jwt"})
+        assert res.status_code == 200, f"Expected 200, got {res.status_code}"
+        data = json.loads(res.data)
+        depts = data["departments"]
+        assert len(depts) == 2
+        cs = next(d for d in depts if d["department"] == "Computer Science")
+        math = next(d for d in depts if d["department"] == "Mathematics")
+        assert cs["is_forwarded"] is True
+        assert math["is_forwarded"] is False
+        print("[PASS] Test 23: VP Departments GET /api/vp/departments returned department forwarding statuses.")
+        passed += 1
+    except Exception as e:
+        print(f"[FAIL] Test 23: {e}")
+
+    # ── TEST 24: HOD list is empty before close_date (portal_open=True) ──
+    try:
+        app_module._get_user_from_token = lambda: {
+            "id": "hod-123", "role": "hod", "department": "Computer Science", "full_name": "Dr. CS HOD"
+        }
+        class MockAdminPreClose:
+            def table(self, name):
+                if name == "app_settings":
+                    return MockQuery([{"key": "close_date", "value": "2099-12-31"}])
+                return MockQuery([{"id": 1, "name": "Secret Cand", "department": "Computer Science", "is_locked": True}])
+
+        app_module.sb_admin = MockAdminPreClose()
+
+        res = client.get('/api/hod/applications', headers={"Authorization": "Bearer fake-jwt"})
+        assert res.status_code == 200, f"Expected 200, got {res.status_code}"
+        data = json.loads(res.data)
+        assert data["portal_open"] is True, "Expected portal_open=True"
+        assert len(data["applications"]) == 0, "Expected empty applications list before close_date"
+        assert "Scrutiny opens after" in data["message"]
+        print("[PASS] Test 24: HOD scrutiny list is empty and portal_open=True before close_date.")
+        passed += 1
+    except Exception as e:
+        print(f"[FAIL] Test 24: {e}")
+
+    # ── TEST 25: CSV Formula Injection Safety Neutralisation ──
+    try:
+        raw_malicious = ["=1+1", "+cmd|' /C calc'!A0", "-SUM(A1:A10)", "@eval(123)", "Normal String"]
+        sanitized = [app_module.sanitize_csv_cell(val) for val in raw_malicious]
+
+        assert sanitized[0] == "'=1+1", f"Failed to neutralize = prefix: {sanitized[0]}"
+        assert sanitized[1] == "'+cmd|' /C calc'!A0", f"Failed to neutralize + prefix: {sanitized[1]}"
+        assert sanitized[2] == "'-SUM(A1:A10)", f"Failed to neutralize - prefix: {sanitized[2]}"
+        assert sanitized[3] == "'@eval(123)", f"Failed to neutralize @ prefix: {sanitized[3]}"
+        assert sanitized[4] == "Normal String", f"Normal string modified unexpectedly: {sanitized[4]}"
+
+        # Test CSV route output with malicious field
+        app_module._get_user_from_token = lambda: {
+            "id": "hod-123", "role": "hod", "department": "Computer Science", "full_name": "Dr. CS HOD", "email": "hod.cs@psgcas.ac.in"
+        }
+        class MockAdminCSVInjection:
+            def table(self, name):
+                return MockQuery([
+                    {"app_uuid": "=cmd|' /C calc'!A0", "name": "+Malicious Name", "email": "inj@test.com", "mobile_no": "-99999", "position": "@Professor", "department": "Computer Science", "hod_status": "Eligible", "hod_remarks": "@Exploit"}
+                ])
+
+        app_module.sb_admin = MockAdminCSVInjection()
+
+        res = client.get('/api/reports/eligible-csv', headers={"Authorization": "Bearer fake-jwt"})
+        assert res.status_code == 200, f"Expected 200, got {res.status_code}"
+        csv_text = res.data.decode('utf-8')
+        assert "'=cmd|" in csv_text, "CSV output missing single-quote on = prefix"
+        assert "'+Malicious Name" in csv_text, "CSV output missing single-quote on + prefix"
+        assert "'-99999" in csv_text, "CSV output missing single-quote on - prefix"
+        assert "'@Professor" in csv_text, "CSV output missing single-quote on @ prefix"
+        print("[PASS] Test 25: CSV formula injection neutralized with leading single quote across all cells.")
+        passed += 1
+    except Exception as e:
+        print(f"[FAIL] Test 25: {e}")
+
+    # ── TEST 26: Forward rejected while a submitted candidate is Pending ──
+    try:
+        app_module._get_user_from_token = lambda: {
+            "id": "hod-123", "role": "hod", "department": "Computer Science", "full_name": "Dr. CS HOD", "email": "hod.cs@psgcas.ac.in"
+        }
+        class MockAdminPendingForwardFail:
+            def rpc(self, name, params):
+                raise Exception("PGRST100: CONNECT_RULE: Cannot forward department \"Computer Science\": 1 applications still pending HOD scrutiny")
+
+        app_module.sb_admin = MockAdminPendingForwardFail()
+
+        res = client.post('/api/hod/forward', headers={"Authorization": "Bearer fake-jwt"})
+        assert res.status_code == 400, f"Expected 400, got {res.status_code}"
+        data = json.loads(res.data)
+        assert "pending HOD scrutiny" in data["error"]
+        print("[PASS] Test 26: Forward rejected (400 CONNECT_RULE) while a submitted candidate is Pending.")
+        passed += 1
+    except Exception as e:
+        print(f"[FAIL] Test 26: {e}")
+
+    # ── TEST 27: Admin report access with ?department=Math vs HOD strict department isolation ──
+    try:
+        # Admin access specifying department on CSV report route
+        app_module._get_user_from_token = lambda: {
+            "id": "admin-999", "role": "admin", "department": None, "full_name": "Admin User"
+        }
+        class MockAdminReport:
+            def table(self, name):
+                if name == "profiles":
+                    return MockQuery([{"full_name": "Dr. Math HOD", "email": "hod.math@psgcas.ac.in"}])
+                return MockQuery([
+                    {"app_uuid": "MATH/001", "name": "Math Cand 1", "department": "Mathematics", "hod_status": "Eligible"}
+                ])
+
+        app_module.sb_admin = MockAdminReport()
+
+        res_admin = client.get('/api/reports/eligible-csv?department=Mathematics', headers={"Authorization": "Bearer fake-jwt"})
+        assert res_admin.status_code == 200, f"Expected 200 for admin, got {res_admin.status_code}"
+        assert b"Mathematics" in res_admin.data, "Admin report missing target department"
+
+        # HOD attempting query param override is forced to own profile department
+        app_module._get_user_from_token = lambda: {
+            "id": "hod-cs", "role": "hod", "department": "Computer Science", "full_name": "Dr. CS HOD"
+        }
+
+        res_hod = client.get('/api/reports/eligible-csv?department=Physics', headers={"Authorization": "Bearer fake-jwt"})
+        assert res_hod.status_code == 200, f"Expected 200 for HOD, got {res_hod.status_code}"
+        assert b"Computer Science" in res_hod.data, "HOD query param override vulnerability!"
+        assert b"Physics" not in res_hod.data, "HOD was able to access cross-department report via query param!"
+        print("[PASS] Test 27: Admin report parameter access verified and HOD query param override attempt neutralized.")
+        passed += 1
+    except Exception as e:
+        print(f"[FAIL] Test 27: {e}")
+
     print("=" * 75)
-    print(f"  RESULTS: {passed}/20 TESTS PASSED")
+    print(f"  RESULTS: {passed}/27 TESTS PASSED")
     print("=" * 75)
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@
     @media(max-width:768px){ [class*="col-md-"] { width: 100%; } }
     .d-flex { display: flex; } .d-none { display: none !important; } .d-grid { display: grid; }
     .gap-2 { gap: .5rem; } .align-items-end { align-items: flex-end; } .align-self-center { align-self: center; }
-    .text-center { text-align: center; } .justify-content-md-center { justify-content: center; }
+    .text-center { text-align: center; } .text-end { text-align: right; } .justify-content-md-center { justify-content: center; }
     .me-md-2 { margin-right: .5rem; } .mt-20 { margin-top: 1.25rem; } .fs-5 { font-size: 1.1rem; }
 
     .card { background: #fff; border-radius: 1rem; box-shadow: 0 4px 24px rgba(0,0,0,.08); overflow: hidden; }
@@ -86,10 +86,6 @@
     .top-bar-logo span { font-weight: 600; font-size: .875rem; color: #0f172a; }
     .btn-back { padding: .375rem .875rem; border-radius: 9999px; border: 1px solid #e2e8f0; font-size: .8125rem; color: #334155; background: #fff; cursor: pointer; }
     .btn-back:hover { background: #f1f5f9; }
-
-    /* Spinner */
-    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; margin-right: .4rem; vertical-align: middle; }
-    @keyframes spin { to{transform:rotate(360deg)} }
 
     /* Success overlay */
     .success-overlay { display: none; position: fixed; inset: 0; z-index: 300; background: rgba(15,23,42,.65); backdrop-filter: blur(6px); align-items: center; justify-content: center; padding: 1rem; }
@@ -177,22 +173,137 @@
         <section>
           <div class="row"><h5 class="card-title-menu">Personal Details</h5></div>
           <div class="row">
-            <div class="form-group col-md-3"><label class="control-label">Name of Applicant <span class="required">*</span></label><input type="text" name="name" maxlength="50" class="form-control" required></div>
-            <div class="form-group col-md-3"><label class="control-label">Upload Photo</label><input type="file" name="photo" accept="image/*" class="form-control form-control-sm"></div>
+            <div class="form-group col-md-3"><label class="control-label">Name of Applicant <span class="required">*</span></label><input type="text" name="name" maxlength="50" class="form-control" required id="id_name"></div>
+            <div class="form-group col-md-3"><label class="control-label">Upload Photo</label><input type="file" name="photo" accept="image/*" class="form-control form-control-sm" id="id_photo"></div>
             <div class="form-group col-md-3"><label class="control-label">Date of Birth <span class="required">*</span></label><input type="date" name="dob" class="form-control" required id="id_dob"></div>
-            <div class="form-group col-md-3"><label class="control-label">Gender <span class="required">*</span></label><select name="gender" class="form-select form-select-sm" required><option value="">---</option><option>Male</option><option>Female</option><option>Transgender</option></select></div>
+            <div class="form-group col-md-3"><label class="control-label">Gender <span class="required">*</span></label><select name="gender" class="form-select form-select-sm" required id="id_gender"><option value="">---</option><option>Male</option><option>Female</option><option>Transgender</option></select></div>
           </div>
           <div class="row">
-            <div class="form-group col-md-3"><label class="control-label">Mother Tongue <span class="required">*</span></label><input type="text" name="mother_tongue" maxlength="50" class="form-control" required></div>
-            <div class="form-group col-md-3"><label class="control-label">Religion <span class="required">*</span></label><input type="text" name="religion" maxlength="50" class="form-control" required></div>
-            <div class="form-group col-md-3"><label class="control-label">Community <span class="required">*</span></label><input type="text" name="community" maxlength="50" class="form-control" required></div>
-            <div class="form-group col-md-3"><label class="control-label">Category <span class="required">*</span></label><select name="category" class="form-select form-select-sm" required><option value="">---</option><option>FC</option><option>BC</option><option>OBC</option><option>MBC</option><option>SC</option><option>ST</option><option>OTHERS</option></select></div>
+            <div class="form-group col-md-3"><label class="control-label">Mother Tongue <span class="required">*</span></label><input type="text" name="mother_tongue" maxlength="50" class="form-control" required id="id_mother_tongue"></div>
+            <div class="form-group col-md-3"><label class="control-label">Religion <span class="required">*</span></label><input type="text" name="religion" maxlength="50" class="form-control" required id="id_religion"></div>
+            <div class="form-group col-md-3"><label class="control-label">Community <span class="required">*</span></label><input type="text" name="community" maxlength="50" class="form-control" required id="id_community"></div>
+            <div class="form-group col-md-3"><label class="control-label">Category <span class="required">*</span></label><select name="category" class="form-select form-select-sm" required id="id_category"><option value="">---</option><option>FC</option><option>BC</option><option>OBC</option><option>MBC</option><option>SC</option><option>ST</option><option>OTHERS</option></select></div>
           </div>
           <div class="row">
-            <div class="form-group col-md-4"><label class="control-label">Father's Name <span class="required">*</span></label><input type="text" name="father_name" maxlength="50" class="form-control" required></div>
-            <div class="form-group col-md-4"><label class="control-label">Mobile No. <span class="required">*</span></label><input type="text" name="mobile_no" maxlength="15" class="form-control" required></div>
-            <div class="form-group col-md-4"><label class="control-label">Email <span class="required">*</span></label><input type="email" name="email" maxlength="254" class="form-control" required></div>
+            <div class="form-group col-md-3"><label class="control-label">Father's Name <span class="required">*</span></label><input type="text" name="father_name" maxlength="50" class="form-control" required id="id_father_name"></div>
+            <div class="form-group col-md-3"><label class="control-label">Marital Status <span class="required">*</span></label><select name="marital_status" class="form-select form-select-sm" required id="id_marital_status"><option value="">---</option><option value="Single">Single</option><option value="Married">Married</option><option value="Divorced">Divorced</option><option value="Widow">Widow</option></select></div>
+            <div class="form-group col-md-3"><label class="control-label">Spouse Name</label><input type="text" name="spouse_name" maxlength="50" class="form-control" id="id_spouse_name"></div>
+            <div class="form-group col-md-3"><label class="control-label">Differently Abled?</label><select name="diff_abled" class="form-select form-select-sm" id="id_diff_abled"><option value="">---</option><option value="No">No</option><option value="Yes">Yes</option></select></div>
           </div>
+          <div class="row">
+            <div class="form-group col-md-3"><label class="control-label">Nature of Disability (if applicable)</label><input type="text" name="nature" maxlength="100" class="form-control" id="id_nature"></div>
+            <div class="form-group col-md-3"><label class="control-label">Aadhaar Number <span class="required">*</span></label><input type="text" name="aadhaar_no" maxlength="20" class="form-control" required id="id_aadhaar_no"></div>
+            <div class="form-group col-md-3"><label class="control-label">PAN Number <span class="required">*</span></label><input type="text" name="pan_no" maxlength="20" class="form-control" required id="id_pan_no"></div>
+            <div class="form-group col-md-3"><label class="control-label">Mobile No. <span class="required">*</span></label><input type="text" name="mobile_no" maxlength="15" class="form-control" required id="id_mobile_no"></div>
+          </div>
+          <div class="row">
+            <div class="form-group col-md-12"><label class="control-label">Email <span class="required">*</span></label><input type="email" name="email" maxlength="254" class="form-control" required id="id_email"></div>
+          </div>
+          <hr class="hr">
+        </section>
+
+        <!-- ── Languages Known ── -->
+        <section>
+          <div class="row"><h5 class="card-title-menu">Languages Known</h5></div>
+          <div id="language-container"></div>
+          <div class="add-more" id="add-lang"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add Language</div></div>
+          <hr class="hr">
+        </section>
+
+        <!-- ── Native Address ── -->
+        <section>
+          <div class="row"><h5 class="card-title-menu">Native / Permanent Address</h5></div>
+          <div class="row">
+            <div class="form-group col-md-6"><label class="control-label">Address <span class="required">*</span></label><textarea name="native_address" rows="2" class="form-control" required id="id_native_address"></textarea></div>
+            <div class="form-group col-md-3"><label class="control-label">City <span class="required">*</span></label><input type="text" name="native_city" maxlength="50" class="form-control" required id="id_native_city"></div>
+            <div class="form-group col-md-3"><label class="control-label">State <span class="required">*</span></label><input type="text" name="native_state" maxlength="50" class="form-control" required id="id_native_state"></div>
+          </div>
+          <div class="row">
+            <div class="form-group col-md-6"><label class="control-label">Country <span class="required">*</span></label><input type="text" name="native_country" maxlength="50" class="form-control" required id="id_native_country"></div>
+            <div class="form-group col-md-6"><label class="control-label">Pincode <span class="required">*</span></label><input type="text" name="native_pincode" maxlength="10" class="form-control" required id="id_native_pincode"></div>
+          </div>
+          <hr class="hr">
+        </section>
+
+        <!-- ── Local / Communication Address ── -->
+        <section>
+          <div class="row d-flex align-items-center justify-content-between">
+            <h5 class="card-title-menu" style="margin:0;">Local / Communication Address</h5>
+            <div class="form-check" style="margin:0;">
+              <input type="checkbox" id="copy-address" class="form-check-input" onchange="copyNativeAddress(this)">
+              <label class="form-check-label" for="copy-address" style="font-weight:600;font-size:.85rem;">Communication Address same as Permanent Address</label>
+            </div>
+          </div>
+          <div class="row" style="margin-top:.75rem;">
+            <div class="form-group col-md-6"><label class="control-label">Address <span class="required">*</span></label><textarea name="local_address" rows="2" class="form-control" required id="id_local_address"></textarea></div>
+            <div class="form-group col-md-3"><label class="control-label">City <span class="required">*</span></label><input type="text" name="local_city" maxlength="50" class="form-control" required id="id_local_city"></div>
+            <div class="form-group col-md-3"><label class="control-label">State <span class="required">*</span></label><input type="text" name="local_state" maxlength="50" class="form-control" required id="id_local_state"></div>
+          </div>
+          <div class="row">
+            <div class="form-group col-md-6"><label class="control-label">Country <span class="required">*</span></label><input type="text" name="local_country" maxlength="50" class="form-control" required id="id_local_country"></div>
+            <div class="form-group col-md-6"><label class="control-label">Pincode <span class="required">*</span></label><input type="text" name="local_pincode" maxlength="10" class="form-control" required id="id_local_pincode"></div>
+          </div>
+          <hr class="hr">
+        </section>
+
+        <!-- ── Educational Details ── -->
+        <section>
+          <div class="row"><h5 class="card-title-menu">Educational Details <small style="font-size:13px;font-weight:400;color:#64748b;">(Mandatory from 10th Std)</small></h5></div>
+
+          <!-- Eligibility Tests & Extra Curricular Checks -->
+          <div class="row align-items-end justify-content-between" style="margin-bottom:.75rem;">
+            <div class="form-group col-md-6">
+              <label class="control-label">Eligibility Test</label>
+              <div class="row-check">
+                <input type="checkbox" name="net" class="form-check-input" id="id_net">
+                <label class="form-check-label" for="id_net">NET</label>
+                <input type="checkbox" name="set_slet" class="form-check-input" id="id_set_slet">
+                <label class="form-check-label" for="id_set_slet">SET / SLET</label>
+              </div>
+            </div>
+            <div class="form-group col-md-6">
+              <label class="control-label">Extra Curricular / Quality Involvement</label>
+              <div class="row-check">
+                <input type="checkbox" name="nss" class="form-check-input" id="id_nss">
+                <label class="form-check-label" for="id_nss">NSS</label>
+                <input type="checkbox" name="ncc" class="form-check-input" id="id_ncc">
+                <label class="form-check-label" for="id_ncc">NCC</label>
+                <input type="checkbox" name="naac" class="form-check-input" id="id_naac">
+                <label class="form-check-label" for="id_naac">NAAC</label>
+                <input type="checkbox" name="iqac" class="form-check-input" id="id_iqac">
+                <label class="form-check-label" for="id_iqac">IQAC</label>
+                <input type="checkbox" name="iso" class="form-check-input" id="id_iso">
+                <label class="form-check-label" for="id_iso">ISO</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Qualification Rows Builder -->
+          <div id="education-container"></div>
+          <div class="add-more" id="add-edu"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add Qualification</div></div>
+
+          <div class="row" style="margin-top:.75rem;">
+            <div class="form-group col-md-12">
+              <label class="control-label">Special Achievements in academics, If any (Not exceeding 300 words)</label>
+              <textarea name="achivements" rows="3" class="form-control" placeholder="Specify awards, honors, ranks or NA" id="id_achivements"></textarea>
+            </div>
+          </div>
+          <hr class="hr">
+        </section>
+
+        <!-- ── Work Experience ── -->
+        <section>
+          <div class="row"><h5 class="card-title-menu">Work Experience</h5></div>
+
+          <!-- Teaching Experience -->
+          <div class="row"><h6 class="card-subtitle-menu">Teaching Experience</h6></div>
+          <div id="teaching-container"></div>
+          <div class="add-more" id="add-teaching"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add Teaching Experience</div></div>
+
+          <!-- Industry Experience -->
+          <div class="row"><h6 class="card-subtitle-menu" style="margin-top:1rem;">Industry Experience</h6></div>
+          <div id="industry-container"></div>
+          <div class="add-more" id="add-industry"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add Industry Experience</div></div>
           <hr class="hr">
         </section>
 
@@ -200,8 +311,15 @@
         <section id="research-section">
           <div class="row"><h5 class="card-title-menu">Research & Publications</h5></div>
 
+          <!-- Extra Scopus & H-Index Fields -->
+          <div class="row">
+            <div class="form-group col-md-4"><label class="control-label">Scopus ID</label><input type="text" name="scopus_id" maxlength="50" class="form-control" placeholder="e.g. 57200112233" id="id_scopus_id"></div>
+            <div class="form-group col-md-4"><label class="control-label">H-Index (Google Scholar)</label><input type="number" name="h_index_google" min="0" class="form-control" placeholder="0" id="id_h_index_google"></div>
+            <div class="form-group col-md-4"><label class="control-label">H-Index (Scopus)</label><input type="number" name="h_index_scopus" min="0" class="form-control" placeholder="0" id="id_h_index_scopus"></div>
+          </div>
+
           <!-- Publications Row Builder -->
-          <div class="row"><h6 class="card-subtitle-menu">1. Publications</h6></div>
+          <div class="row"><h6 class="card-subtitle-menu" style="margin-top:.75rem;">1. Publications</h6></div>
           <div id="pub-container"></div>
           <div class="add-more" id="add-pub"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add Publication</div></div>
 
@@ -220,13 +338,18 @@
           <div id="prj-container"></div>
           <div class="add-more" id="add-prj"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add Research Project</div></div>
 
+          <!-- Post-Doctoral / Fellowships (PDF Details) -->
+          <div class="row"><h6 class="card-subtitle-menu" style="margin-top:1rem;">5. Post-Doctoral / Fellowships (PDF Details)</h6></div>
+          <div id="pdf-container"></div>
+          <div class="add-more" id="add-pdf"><div class="d-flex"><i class="fa-solid fa-plus"></i>&nbsp; Add PDF Detail</div></div>
+
           <!-- Quality & Administrative Roles -->
-          <div class="row"><h6 class="card-subtitle-menu" style="margin-top:1rem;">5. Quality Assurance & Administrative Experience</h6></div>
+          <div class="row"><h6 class="card-subtitle-menu" style="margin-top:1rem;">6. Quality Assurance & Administrative Experience</h6></div>
           <div class="row">
             <div class="form-group col-md-4">
               <div class="form-check" style="margin-top:1.5rem;">
-                <input type="checkbox" name="iso_involvement" class="form-check-input" id="id_iso">
-                <label class="form-check-label" for="id_iso">ISO Involvement</label>
+                <input type="checkbox" name="iso_involvement" class="form-check-input" id="id_iso_involvement">
+                <label class="form-check-label" for="id_iso_involvement">ISO Involvement</label>
               </div>
             </div>
             <div class="form-group col-md-8">
@@ -247,10 +370,75 @@
           <hr class="hr">
         </section>
 
-        <!-- ── Resume Upload & Declaration ── -->
+        <!-- ── Salary & Joining Details ── -->
         <section>
-          <div class="row"><h5 class="card-title-menu">Documents & Declaration</h5></div>
-          <div class="row"><div class="form-group col-md-12"><label class="control-label">Upload Resume (PDF/DOC, max 5 MB) <span class="required">*</span></label><input type="file" name="resume" accept=".pdf,.doc,.docx" class="form-control form-control-sm"></div></div>
+          <div class="row"><h5 class="card-title-menu">Salary &amp; Joining Details</h5></div>
+          <div class="row">
+            <div class="form-group col-md-4"><label class="control-label">Last Pay Drawn (₹)</label><input type="text" name="last_pay" class="form-control" id="id_last_pay"></div>
+            <div class="form-group col-md-4"><label class="control-label">Pay Expected (₹) <span class="required">*</span></label><input type="text" name="pay_expected" class="form-control" required id="id_pay_expected"></div>
+            <div class="form-group col-md-4"><label class="control-label">Joining Time Required <span class="required">*</span></label><input type="text" name="join_time" class="form-control" required placeholder="e.g. 1 Month / Immediate" id="id_join_time"></div>
+          </div>
+          <hr class="hr">
+        </section>
+
+        <!-- ── Professional References ── -->
+        <section>
+          <div class="row"><h5 class="card-title-menu">Professional References</h5></div>
+          <div class="row"><h6 class="card-subtitle-menu">Reference 1</h6></div>
+          <div class="row">
+            <div class="form-group col-md-3"><label class="control-label">Name <span class="required">*</span></label><input type="text" name="name_1" class="form-control" required id="id_name_1"></div>
+            <div class="form-group col-md-3"><label class="control-label">Designation <span class="required">*</span></label><input type="text" name="designation_1" class="form-control" required id="id_designation_1"></div>
+            <div class="form-group col-md-3"><label class="control-label">Mobile <span class="required">*</span></label><input type="text" name="mobile_1" class="form-control" required id="id_mobile_1"></div>
+            <div class="form-group col-md-3"><label class="control-label">Email <span class="required">*</span></label><input type="email" name="email_1" class="form-control" required id="id_email_1"></div>
+          </div>
+          <div class="row">
+            <div class="form-group col-md-12"><label class="control-label">Address <span class="required">*</span></label><input type="text" name="address_1" class="form-control" required id="id_address_1"></div>
+          </div>
+
+          <div class="row" style="margin-top:1rem;"><h6 class="card-subtitle-menu">Reference 2</h6></div>
+          <div class="row">
+            <div class="form-group col-md-3"><label class="control-label">Name <span class="required">*</span></label><input type="text" name="name_2" class="form-control" required id="id_name_2"></div>
+            <div class="form-group col-md-3"><label class="control-label">Designation <span class="required">*</span></label><input type="text" name="designation_2" class="form-control" required id="id_designation_2"></div>
+            <div class="form-group col-md-3"><label class="control-label">Mobile <span class="required">*</span></label><input type="text" name="mobile_2" class="form-control" required id="id_mobile_2"></div>
+            <div class="form-group col-md-3"><label class="control-label">Email <span class="required">*</span></label><input type="email" name="email_2" class="form-control" required id="id_email_2"></div>
+          </div>
+          <div class="row">
+            <div class="form-group col-md-12"><label class="control-label">Address <span class="required">*</span></label><input type="text" name="address_2" class="form-control" required id="id_address_2"></div>
+          </div>
+          <hr class="hr">
+        </section>
+
+        <!-- ── Additional Declarations & Vacancy ── -->
+        <section>
+          <div class="row"><h5 class="card-title-menu">Additional Details &amp; Declarations</h5></div>
+          <div class="row">
+            <div class="form-group col-md-6"><label class="control-label">Any Relative Working at PSG Institutions?</label><textarea name="relative" rows="2" class="form-control" placeholder="Specify Name, Designation, Institution or Type NA" id="id_relative"></textarea></div>
+            <div class="form-group col-md-6"><label class="control-label">Attended Interview at PSG CAS Before? <span class="required">*</span></label><select name="already_attended" class="form-select form-select-sm" required id="id_already_attended"><option value="">---</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
+          </div>
+          <div class="row">
+            <div class="form-group col-md-6">
+              <label class="control-label">How do you know about the Vacancy Position? <span class="required">*</span></label>
+              <select name="huk" class="form-select form-select-sm" required id="id_huk">
+                <option value="">---------</option>
+                <option value="Newspaper">Newspaper</option>
+                <option value="Website">Website</option>
+                <option value="Social Media">Social Media</option>
+                <option value="Friends">Friends</option>
+                <option value="Others">Others</option>
+              </select>
+            </div>
+            <div class="form-group col-md-6"><label class="control-label">Additional Comments</label><textarea name="comments" rows="2" class="form-control" placeholder="Any additional comments or Type NA" id="id_comments"></textarea></div>
+          </div>
+          <hr class="hr">
+        </section>
+
+        <!-- ── Resume & Papers Upload & Declaration ── -->
+        <section>
+          <div class="row"><h5 class="card-title-menu">Documents &amp; Declaration</h5></div>
+          <div class="row">
+            <div class="form-group col-md-6"><label class="control-label">Upload Resume (PDF/DOC, max 5 MB) <span class="required">*</span></label><input type="file" name="resume" accept=".pdf,.doc,.docx" class="form-control form-control-sm" id="id_resume"></div>
+            <div class="form-group col-md-6"><label class="control-label">Upload Research Papers / Proofs (PDF/DOC, max 5 MB)</label><input type="file" name="papers" accept=".pdf,.doc,.docx" class="form-control form-control-sm" id="id_papers"></div>
+          </div>
           <div class="form-check" style="align-items:flex-start;gap:.5rem;margin-top:1rem;">
             <input type="checkbox" name="tac" class="form-check-input" required id="id_tac" style="margin-top:3px;flex-shrink:0;">
             <label class="form-check-label" for="id_tac">I hereby declare that the information furnished herein above is correct and true to the best of my knowledge.</label>
@@ -258,9 +446,10 @@
           <hr class="hr">
         </section>
 
-        <!-- Submit Buttons -->
+        <!-- Submit & Reset Buttons -->
         <div style="display:flex;justify-content:center;gap:1rem;margin-top:1rem;" id="action-btn-group">
           <button class="btn btn-secondary" type="button" id="draft-btn">💾 Save Draft</button>
+          <button class="btn btn-secondary" type="reset" id="reset-btn">🔄 Reset Form</button>
           <button class="btn btn-primary" type="submit" id="submit-btn">🚀 Submit Application (Final)</button>
         </div>
       </div>
@@ -295,7 +484,174 @@
 
   // ── 1. DYNAMIC ROW BUILDERS ──
 
-  // 1a. Publication Row
+  // 1a. Language Row
+  function addLangRow(data) {
+    data = data || {};
+    const c = document.getElementById('language-container');
+    const d = document.createElement('div');
+    d.className = 'dyn-row lang-item';
+    d.innerHTML = `
+      <div class="row align-items-end">
+        <div class="form-group col-md-3">
+          <label class="control-label">Language <span class="required">*</span></label>
+          <input type="text" class="form-control lang-name" required value="${data.language || ''}">
+        </div>
+        <div class="form-group col-md-2">
+          <div class="form-check" style="margin-top:1.8rem;">
+            <input type="checkbox" class="form-check-input lang-speak" ${data.speak ? 'checked' : ''}>
+            <label class="form-check-label">Speak</label>
+          </div>
+        </div>
+        <div class="form-group col-md-2">
+          <div class="form-check" style="margin-top:1.8rem;">
+            <input type="checkbox" class="form-check-input lang-read" ${data.read ? 'checked' : ''}>
+            <label class="form-check-label">Read</label>
+          </div>
+        </div>
+        <div class="form-group col-md-2">
+          <div class="form-check" style="margin-top:1.8rem;">
+            <input type="checkbox" class="form-check-input lang-write" ${data.write ? 'checked' : ''}>
+            <label class="form-check-label">Write</label>
+          </div>
+        </div>
+        <div class="form-group col-md-3 align-self-end text-end" style="margin-bottom:.8rem;">
+          <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.lang-item').remove()">Remove</button>
+        </div>
+      </div>`;
+    c.appendChild(d);
+  }
+
+  // 1b. Education Row
+  function addEduRow(data) {
+    data = data || {};
+    const c = document.getElementById('education-container');
+    const d = document.createElement('div');
+    d.className = 'dyn-row edu-item';
+    d.innerHTML = `
+      <div class="row">
+        <div class="form-group col-md-2">
+          <label class="control-label">Qualification <span class="required">*</span></label>
+          <select class="form-select form-select-sm edu-qual" required>
+            <option value="">---</option>
+            <option ${data.qualification === '10th' ? 'selected' : ''}>10th</option>
+            <option ${data.qualification === '12th' ? 'selected' : ''}>12th</option>
+            <option ${data.qualification === 'UG' ? 'selected' : ''}>UG</option>
+            <option ${data.qualification === 'PG' ? 'selected' : ''}>PG</option>
+            <option ${data.qualification === 'MPhil' ? 'selected' : ''}>MPhil</option>
+            <option ${data.qualification === 'PhD' ? 'selected' : ''}>PhD</option>
+            <option ${data.qualification === 'Certificate Course' ? 'selected' : ''}>Certificate Course</option>
+          </select>
+        </div>
+        <div class="form-group col-md-2">
+          <label class="control-label">Degree <span class="required">*</span></label>
+          <input type="text" class="form-control edu-deg" required value="${data.degree || ''}">
+        </div>
+        <div class="form-group col-md-3">
+          <label class="control-label">Specialization <span class="required">*</span></label>
+          <input type="text" class="form-control edu-spec" required value="${data.specialization || ''}">
+        </div>
+        <div class="form-group col-md-3">
+          <label class="control-label">Percentage (%) <span class="required">*</span></label>
+          <input type="text" class="form-control edu-pct" required value="${data.percentage || ''}">
+        </div>
+        <div class="form-group col-md-2">
+          <label class="control-label">Year of Completion <span class="required">*</span></label>
+          <input type="text" class="form-control edu-year" required value="${data.year || ''}">
+        </div>
+      </div>
+      <div class="row">
+        <div class="form-group col-md-3">
+          <label class="control-label">School / College <span class="required">*</span></label>
+          <input type="text" class="form-control edu-college" required value="${data.college || ''}">
+        </div>
+        <div class="form-group col-md-3">
+          <label class="control-label">University (if applicable) <span class="required">*</span></label>
+          <input type="text" class="form-control edu-uni" required value="${data.university || ''}">
+        </div>
+        <div class="form-group col-md-2">
+          <label class="control-label">Mode <span class="required">*</span></label>
+          <select class="form-select form-select-sm edu-rc" required>
+            <option value="">---</option>
+            <option ${data.rc === 'Regular' ? 'selected' : ''}>Regular</option>
+            <option ${data.rc === 'Correspondence' || data.rc === 'Correspondance' ? 'selected' : ''}>Correspondence</option>
+          </select>
+        </div>
+        <div class="form-group col-md-2">
+          <label class="control-label">Type <span class="required">*</span></label>
+          <select class="form-select form-select-sm edu-pf" required>
+            <option value="">---</option>
+            <option ${data.pf === 'Full-Time' ? 'selected' : ''}>Full-Time</option>
+            <option ${data.pf === 'Part-Time' ? 'selected' : ''}>Part-Time</option>
+          </select>
+        </div>
+        <div class="form-group col-md-2 align-self-center text-end" style="margin-top:1.5rem;">
+          <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.edu-item').remove()">Remove</button>
+        </div>
+      </div>`;
+    c.appendChild(d);
+  }
+
+  // 1c. Teaching Experience Row
+  function addTeachingRow(data) {
+    data = data || {};
+    const c = document.getElementById('teaching-container');
+    const d = document.createElement('div');
+    d.className = 'dyn-row tch-item';
+    d.innerHTML = `
+      <div class="row">
+        <div class="form-group col-md-3"><label class="control-label">Designation <span class="required">*</span></label><input type="text" class="form-control tch-desig" required value="${data.designation || ''}"></div>
+        <div class="form-group col-md-3"><label class="control-label">Institution Name <span class="required">*</span></label><input type="text" class="form-control tch-name" required value="${data.name || ''}"></div>
+        <div class="form-group col-md-4"><label class="control-label">Address of Institution <span class="required">*</span></label><input type="text" class="form-control tch-addr" required value="${data.address || ''}"></div>
+        <div class="form-group col-md-2"><label class="control-label">Certificate Available</label>
+          <select class="form-select form-select-sm tch-cert">
+            <option value="">---</option>
+            <option ${data.certificate === 'Yes' ? 'selected' : ''}>Yes</option>
+            <option ${data.certificate === 'No' ? 'selected' : ''}>No</option>
+            <option ${data.certificate === 'Currently Working' ? 'selected' : ''}>Currently Working</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="form-group col-md-5"><label class="control-label">From Date <span class="required">*</span></label><input type="date" class="form-control tch-from" required value="${data.dtfrom || ''}"></div>
+        <div class="form-group col-md-5"><label class="control-label">To Date <span class="required">*</span></label><input type="date" class="form-control tch-to" required value="${data.dtto || ''}"></div>
+        <div class="form-group col-md-2 align-self-center text-end" style="margin-top:1.5rem;">
+          <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.tch-item').remove()">Remove</button>
+        </div>
+      </div>`;
+    c.appendChild(d);
+  }
+
+  // 1d. Industry Experience Row
+  function addIndustryRow(data) {
+    data = data || {};
+    const c = document.getElementById('industry-container');
+    const d = document.createElement('div');
+    d.className = 'dyn-row ind-item';
+    d.innerHTML = `
+      <div class="row">
+        <div class="form-group col-md-3"><label class="control-label">Designation <span class="required">*</span></label><input type="text" class="form-control ind-desig" required value="${data.designation || ''}"></div>
+        <div class="form-group col-md-3"><label class="control-label">Company / Organisation <span class="required">*</span></label><input type="text" class="form-control ind-name" required value="${data.name || ''}"></div>
+        <div class="form-group col-md-4"><label class="control-label">Address <span class="required">*</span></label><input type="text" class="form-control ind-addr" required value="${data.address || ''}"></div>
+        <div class="form-group col-md-2"><label class="control-label">Certificate Available</label>
+          <select class="form-select form-select-sm ind-cert">
+            <option value="">---</option>
+            <option ${data.certificate === 'Yes' ? 'selected' : ''}>Yes</option>
+            <option ${data.certificate === 'No' ? 'selected' : ''}>No</option>
+            <option ${data.certificate === 'Currently Working' ? 'selected' : ''}>Currently Working</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="form-group col-md-5"><label class="control-label">From Date <span class="required">*</span></label><input type="date" class="form-control ind-from" required value="${data.dtfrom || ''}"></div>
+        <div class="form-group col-md-5"><label class="control-label">To Date <span class="required">*</span></label><input type="date" class="form-control ind-to" required value="${data.dtto || ''}"></div>
+        <div class="form-group col-md-2 align-self-center text-end" style="margin-top:1.5rem;">
+          <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.ind-item').remove()">Remove</button>
+        </div>
+      </div>`;
+    c.appendChild(d);
+  }
+
+  // 1e. Publication Row
   function addPubRow(data) {
     data = data || {};
     const c = document.getElementById('pub-container');
@@ -342,7 +698,7 @@
       <div class="row">
         <div class="form-group col-md-5"><label class="control-label">DOI / Link</label><input type="text" class="form-control pub-doi" value="${data.doi_link||''}"></div>
         <div class="form-group col-md-5"><label class="control-label">Additional Details</label><input type="text" class="form-control pub-extra" value="${data.additional_details||''}"></div>
-        <div class="form-group col-md-2 align-self-center" style="margin-top:1.5rem;">
+        <div class="form-group col-md-2 align-self-center text-end" style="margin-top:1.5rem;">
           <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.pub-item').remove()">Remove</button>
         </div>
       </div>`;
@@ -360,7 +716,7 @@
     }
   }
 
-  // 1b. Patent Row
+  // 1f. Patent Row
   function addPatRow(data) {
     data = data || {};
     const c = document.getElementById('pat-container');
@@ -380,14 +736,14 @@
         </div>
         <div class="form-group col-md-3"><label class="control-label">Patent Number</label><input type="text" class="form-control pat-num" value="${data.patent_number||''}"></div>
         <div class="form-group col-md-2"><label class="control-label">Year (1950-2030)</label><input type="number" class="form-control pat-year" min="1950" max="2030" value="${data.year||''}"></div>
-        <div class="form-group col-md-1 align-self-center" style="margin-top:1.5rem;">
+        <div class="form-group col-md-1 align-self-center text-end" style="margin-top:1.5rem;">
           <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.pat-item').remove()">✕</button>
         </div>
       </div>`;
     c.appendChild(d);
   }
 
-  // 1c. Consultancy Row
+  // 1g. Consultancy Row
   function addConRow(data) {
     data = data || {};
     const c = document.getElementById('con-container');
@@ -401,14 +757,14 @@
         <div class="form-group col-md-4"><label class="control-label">Project Title <span class="required">*</span></label><input type="text" class="form-control con-title" required value="${data.title||''}"></div>
         <div class="form-group col-md-2"><label class="control-label">Year</label><input type="number" class="form-control con-year" min="1950" max="2030" value="${data.year||''}"></div>
         <div class="form-group col-md-2"><label class="control-label">Amount (₹)</label><input type="number" class="form-control con-amt" min="0" value="${data.amount||''}"></div>
-        <div class="form-group col-md-1 align-self-center" style="margin-top:1.5rem;">
+        <div class="form-group col-md-1 align-self-center text-end" style="margin-top:1.5rem;">
           <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.con-item').remove()">✕</button>
         </div>
       </div>`;
     c.appendChild(d);
   }
 
-  // 1d. Project Row
+  // 1h. Project Row
   function addPrjRow(data) {
     data = data || {};
     const c = document.getElementById('prj-container');
@@ -435,14 +791,37 @@
             <option ${data.role==='Member'?'selected':''}>Member</option>
           </select>
         </div>
-        <div class="form-group col-md-1 align-self-center" style="margin-top:1.5rem;">
+        <div class="form-group col-md-1 align-self-center text-end" style="margin-top:1.5rem;">
           <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.prj-item').remove()">✕</button>
         </div>
       </div>`;
     c.appendChild(d);
   }
 
-  // 1e. Admin Position Row
+  // 1i. PDF Row
+  function addPdfRow(data) {
+    data = data || {};
+    const c = document.getElementById('pdf-container');
+    const d = document.createElement('div');
+    d.className = 'dyn-row pdf-item';
+    d.innerHTML = `
+      <div class="row">
+        <div class="form-group col-md-4"><label class="control-label">Scope</label>
+          <select class="form-select form-select-sm pdf-scope">
+            <option value="">---</option>
+            <option ${data.status === 'National' ? 'selected' : ''}>National</option>
+            <option ${data.status === 'International' ? 'selected' : ''}>International</option>
+          </select>
+        </div>
+        <div class="form-group col-md-6"><label class="control-label">Name of Institute, Country</label><input type="text" class="form-control pdf-inst" value="${data.name || ''}"></div>
+        <div class="form-group col-md-2 align-self-center text-end" style="margin-top:1.5rem;">
+          <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.pdf-item').remove()">✕</button>
+        </div>
+      </div>`;
+    c.appendChild(d);
+  }
+
+  // 1j. Admin Position Row
   function addAdminRow(data) {
     data = data || {};
     const c = document.getElementById('admin-container');
@@ -453,18 +832,23 @@
         <div class="form-group col-md-4"><label class="control-label">Position Title</label><input type="text" class="form-control admin-pos-title" placeholder="e.g. HOD / Warden" value="${data.position||''}"></div>
         <div class="form-group col-md-5"><label class="control-label">Institution / Department</label><input type="text" class="form-control admin-pos-inst" value="${data.institution||''}"></div>
         <div class="form-group col-md-2"><label class="control-label">Duration</label><input type="text" class="form-control admin-pos-dur" placeholder="2020-2022" value="${data.duration||''}"></div>
-        <div class="form-group col-md-1 align-self-center" style="margin-top:1.5rem;">
+        <div class="form-group col-md-1 align-self-center text-end" style="margin-top:1.5rem;">
           <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.admin-pos-item').remove()">✕</button>
         </div>
       </div>`;
     c.appendChild(d);
   }
 
-  // Listeners
+  // Event Listeners for Add Buttons
+  document.getElementById('add-lang').addEventListener('click', () => addLangRow());
+  document.getElementById('add-edu').addEventListener('click', () => addEduRow());
+  document.getElementById('add-teaching').addEventListener('click', () => addTeachingRow());
+  document.getElementById('add-industry').addEventListener('click', () => addIndustryRow());
   document.getElementById('add-pub').addEventListener('click', () => addPubRow());
   document.getElementById('add-pat').addEventListener('click', () => addPatRow());
   document.getElementById('add-con').addEventListener('click', () => addConRow());
   document.getElementById('add-prj').addEventListener('click', () => addPrjRow());
+  document.getElementById('add-pdf').addEventListener('click', () => addPdfRow());
   document.getElementById('add-admin-pos').addEventListener('click', () => addAdminRow());
 
   // Load departments
@@ -480,6 +864,17 @@
     } catch(e) {}
   })();
 
+  function copyNativeAddress(chk) {
+    const f = document.getElementById('apply-form');
+    if (chk.checked) {
+      if (f.native_address) f.local_address.value = f.native_address.value;
+      if (f.native_city) f.local_city.value = f.native_city.value;
+      if (f.native_state) f.local_state.value = f.native_state.value;
+      if (f.native_country) f.local_country.value = f.native_country.value;
+      if (f.native_pincode) f.local_pincode.value = f.native_pincode.value;
+    }
+  }
+
   // ── 2. LOAD EXISTING DRAFT DATA ON OPEN ──
   async function loadExistingDraft() {
     try {
@@ -491,42 +886,73 @@
       currentAppId = app.id;
       isLocked = !!app.is_locked;
 
-      // Populate basic fields
+      // Populate basic scalar fields
       const f = document.getElementById('apply-form');
-      if (app.position) f.position.value = app.position;
-      if (app.department) f.department.value = app.department;
-      if (app.name) f.name.value = app.name;
-      if (app.dob) f.dob.value = app.dob;
-      if (app.gender) f.gender.value = app.gender;
-      if (app.mother_tongue) f.mother_tongue.value = app.mother_tongue;
-      if (app.religion) f.religion.value = app.religion;
-      if (app.community) f.community.value = app.community;
-      if (app.category) f.category.value = app.category;
-      if (app.father_name) f.father_name.value = app.father_name;
-      if (app.mobile_no) f.mobile_no.value = app.mobile_no;
-      if (app.email) f.email.value = app.email;
+      const textFields = [
+        "position", "department", "name", "dob", "gender", "mother_tongue", "religion",
+        "community", "category", "father_name", "mobile_no", "email",
+        "marital_status", "spouse_name", "diff_abled", "nature", "aadhaar_no", "pan_no",
+        "native_address", "native_city", "native_state", "native_country", "native_pincode",
+        "local_address", "local_city", "local_state", "local_country", "local_pincode",
+        "last_pay", "pay_expected", "join_time",
+        "name_1", "designation_1", "mobile_1", "email_1", "address_1",
+        "name_2", "designation_2", "mobile_2", "email_2", "address_2",
+        "relative", "already_attended", "huk", "achivements", "comments",
+        "scopus_id", "h_index_google", "h_index_scopus"
+      ];
 
-      // Fetch research data
+      textFields.forEach(k => {
+        if (app[k] !== undefined && app[k] !== null && f[k]) {
+          f[k].value = app[k];
+        }
+      });
+
+      // Populate Checkboxes
+      ["net", "set_slet", "nss", "ncc", "naac", "iqac", "iso"].forEach(cb => {
+        if (app[cb] && f[cb]) {
+          f[cb].checked = (app[cb] === true || app[cb] === "true" || app[cb] === "1");
+        }
+      });
+
+      // Clear dynamic row containers
+      document.getElementById('language-container').innerHTML = '';
+      document.getElementById('education-container').innerHTML = '';
+      document.getElementById('teaching-container').innerHTML = '';
+      document.getElementById('industry-container').innerHTML = '';
+      document.getElementById('pub-container').innerHTML = '';
+      document.getElementById('pat-container').innerHTML = '';
+      document.getElementById('con-container').innerHTML = '';
+      document.getElementById('prj-container').innerHTML = '';
+      document.getElementById('pdf-container').innerHTML = '';
+      document.getElementById('admin-container').innerHTML = '';
+
+      // Helper to parse JSON arrays safely
+      function parseJSON(val) {
+        if (!val) return [];
+        if (Array.isArray(val)) return val;
+        try { return JSON.parse(val); } catch(e) { return []; }
+      }
+
+      // Populate dynamic rows
+      parseJSON(app.languages).forEach(l => addLangRow(l));
+      parseJSON(app.education).forEach(e => addEduRow(e));
+      parseJSON(app.teaching_experience).forEach(t => addTeachingRow(t));
+      parseJSON(app.industry_experience).forEach(i => addIndustryRow(i));
+      parseJSON(app.pdf_details).forEach(p => addPdfRow(p));
+
+      // Fetch research sub-table rows
       const rRes = await fetch('/api/applications/' + app.id + '/research', { headers: { 'Authorization': 'Bearer ' + token } });
       if (rRes.ok) {
         const rData = await rRes.json();
-
-        // Clear default containers
-        document.getElementById('pub-container').innerHTML = '';
-        document.getElementById('pat-container').innerHTML = '';
-        document.getElementById('con-container').innerHTML = '';
-        document.getElementById('prj-container').innerHTML = '';
-        document.getElementById('admin-container').innerHTML = '';
-
         (rData.publications || []).forEach(p => addPubRow(p));
         (rData.patents || []).forEach(p => addPatRow(p));
         (rData.consultancy || []).forEach(c => addConRow(c));
         (rData.projects || []).forEach(pr => addPrjRow(pr));
         (rData.admin_positions || []).forEach(a => addAdminRow(a));
 
-        if (rData.iso_involvement) document.getElementById('id_iso').checked = true;
-        if (rData.iso_details) f.iso_details.value = rData.iso_details;
-        if (rData.naac_iqac_details) f.naac_iqac_details.value = rData.naac_iqac_details;
+        if (rData.iso_involvement && document.getElementById('id_iso_involvement')) document.getElementById('id_iso_involvement').checked = true;
+        if (rData.iso_details && f.iso_details) f.iso_details.value = rData.iso_details;
+        if (rData.naac_iqac_details && f.naac_iqac_details) f.naac_iqac_details.value = rData.naac_iqac_details;
       }
 
       // Lock UI if submitted
@@ -591,11 +1017,58 @@
       patents: pats,
       consultancy: cons,
       projects: prjs,
-      iso_involvement: document.getElementById('id_iso').checked,
-      iso_details: document.querySelector('input[name="iso_details"]').value,
-      naac_iqac_details: document.querySelector('textarea[name="naac_iqac_details"]').value,
+      iso_involvement: document.getElementById('id_iso_involvement')?.checked || false,
+      iso_details: document.querySelector('input[name="iso_details"]')?.value || '',
+      naac_iqac_details: document.querySelector('textarea[name="naac_iqac_details"]')?.value || '',
       admin_positions: adminPos,
     };
+  }
+
+  // Collect dynamic row arrays for form submission
+  function collectDynamicRows() {
+    const languages = Array.from(document.querySelectorAll('.lang-item')).map(r => ({
+      language: r.querySelector('.lang-name')?.value,
+      speak: r.querySelector('.lang-speak')?.checked || false,
+      read: r.querySelector('.lang-read')?.checked || false,
+      write: r.querySelector('.lang-write')?.checked || false,
+    }));
+
+    const education = Array.from(document.querySelectorAll('.edu-item')).map(r => ({
+      qualification: r.querySelector('.edu-qual')?.value,
+      degree: r.querySelector('.edu-deg')?.value,
+      specialization: r.querySelector('.edu-spec')?.value,
+      percentage: r.querySelector('.edu-pct')?.value,
+      year: r.querySelector('.edu-year')?.value,
+      college: r.querySelector('.edu-college')?.value,
+      university: r.querySelector('.edu-uni')?.value,
+      rc: r.querySelector('.edu-rc')?.value,
+      pf: r.querySelector('.edu-pf')?.value,
+    }));
+
+    const teaching = Array.from(document.querySelectorAll('.tch-item')).map(r => ({
+      designation: r.querySelector('.tch-desig')?.value,
+      name: r.querySelector('.tch-name')?.value,
+      address: r.querySelector('.tch-addr')?.value,
+      certificate: r.querySelector('.tch-cert')?.value,
+      dtfrom: r.querySelector('.tch-from')?.value,
+      dtto: r.querySelector('.tch-to')?.value,
+    }));
+
+    const industry = Array.from(document.querySelectorAll('.ind-item')).map(r => ({
+      designation: r.querySelector('.ind-desig')?.value,
+      name: r.querySelector('.ind-name')?.value,
+      address: r.querySelector('.ind-addr')?.value,
+      certificate: r.querySelector('.ind-cert')?.value,
+      dtfrom: r.querySelector('.ind-from')?.value,
+      dtto: r.querySelector('.ind-to')?.value,
+    }));
+
+    const pdfDetails = Array.from(document.querySelectorAll('.pdf-item')).map(r => ({
+      status: r.querySelector('.pdf-scope')?.value,
+      name: r.querySelector('.pdf-inst')?.value,
+    }));
+
+    return { languages, education, teaching, industry, pdfDetails };
   }
 
   // ── 4. SAVE DRAFT OR SUBMIT ──
@@ -611,6 +1084,7 @@
     }
 
     const researchData = collectResearch();
+    const dynamicRows = collectDynamicRows();
 
     // Year validation
     for (let p of researchData.publications) {
@@ -623,6 +1097,11 @@
 
     const fd = new FormData(f);
     fd.append('is_submitted', isFinalSubmit ? 'true' : 'false');
+    fd.append('languages', JSON.stringify(dynamicRows.languages));
+    fd.append('education', JSON.stringify(dynamicRows.education));
+    fd.append('teaching_experience', JSON.stringify(dynamicRows.teaching));
+    fd.append('industry_experience', JSON.stringify(dynamicRows.industry));
+    fd.append('pdf_details', JSON.stringify(dynamicRows.pdfDetails));
 
     try {
       // Step A: Save main application

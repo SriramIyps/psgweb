@@ -169,17 +169,26 @@
     return res;
   }
 
-  // Load departments for filter
-  (async function() {
+  var deptForwardedMap = {};
+
+  // Load departments with forwarding status
+  async function loadDepartments() {
     try {
-      var res = await api('/api/departments');
+      var res = await api('/api/vp/departments');
       var data = await res.json();
       var sel = document.getElementById('filter-dept');
+      sel.innerHTML = '<option value="">All Departments</option>';
       (data.departments || []).forEach(function(d) {
-        var o = document.createElement('option'); o.value = d; o.textContent = d; sel.appendChild(o);
+        deptForwardedMap[d.department] = d;
+        var o = document.createElement('option');
+        o.value = d.department;
+        var statusTag = d.is_forwarded ? ' [Forwarded]' : ' [Pending HOD Forward]';
+        o.textContent = d.department + statusTag;
+        sel.appendChild(o);
       });
     } catch(e) {}
-  })();
+  }
+  loadDepartments();
 
   async function loadApps() {
     var wrap = document.getElementById('table-wrap');
@@ -187,6 +196,19 @@
     var dept = document.getElementById('filter-dept').value;
     var hod = document.getElementById('filter-hod').value;
     var vp = document.getElementById('filter-vp').value;
+
+    if (dept && deptForwardedMap[dept] && !deptForwardedMap[dept].is_forwarded) {
+      wrap.innerHTML = '<div class="empty-state"><i class="fa-solid fa-clock-rotate-left" style="color:#d97706; font-size: 2.5rem; margin-bottom: .75rem;"></i>' +
+        '<h3 style="font-weight:700; color:#1e293b; margin-bottom:.5rem;">Department Scrutiny Pending Forwarding</h3>' +
+        '<p style="max-width:520px; margin:0 auto; line-height:1.5;">The HOD for <strong>' + esc(dept) + '</strong> has not forwarded scrutinised candidates to the Vice Principal yet. Eligible candidates from this department will appear here once HOD forwarding is complete.</p></div>';
+      document.getElementById('count-label').textContent = '(0)';
+      document.getElementById('s-total').textContent = '0';
+      document.getElementById('s-eligible').textContent = '0';
+      document.getElementById('s-shortlisted').textContent = '0';
+      document.getElementById('s-today').textContent = '0';
+      return;
+    }
+
     var url = '/api/applications?';
     if (q) url += 'q=' + encodeURIComponent(q) + '&';
     if (dept) url += 'department=' + encodeURIComponent(dept) + '&';
@@ -206,7 +228,7 @@
       document.getElementById('s-today').textContent = apps.filter(function(a){return (a.submitted_at||'').startsWith(today)}).length;
 
       if (!apps.length) {
-        wrap.innerHTML = '<div class="empty-state"><i class="fa-solid fa-inbox"></i>No applications found.</div>';
+        wrap.innerHTML = '<div class="empty-state"><i class="fa-solid fa-inbox"></i>No eligible forwarded candidates available.</div>';
         return;
       }
 
@@ -231,7 +253,7 @@
           html += '<button class="btn-shortlist" onclick="vpReview(' + a.id + ',\'Shortlisted\')">✓ Shortlist</button>';
           html += '<button class="btn-reject" onclick="vpReview(' + a.id + ',\'Not Shortlisted\')">✗ Reject</button>';
         } else if (a.hod_status !== 'Eligible') {
-          html += '<button class="btn-shortlist btn-disabled" disabled title="HOD must mark as Eligible first">✓ Shortlist</button>';
+          html += '<button class="btn-shortlist btn-disabled" disabled title="HOD must mark as Eligible and forward department first">✓ Shortlist</button>';
         }
         html += '</div></td></tr>';
       });

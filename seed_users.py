@@ -49,22 +49,22 @@ def create_user(email: str, password: str, role: str, full_name: str, department
             "department": department,
         }).execute()
 
-        print(f"  ✓ {role.upper():12s}  {email}  (id: {user_id})")
+        print(f"  [OK]   {role.upper():12s}  {email}  (id: {user_id})")
         return user_id
 
     except Exception as e:
         err_msg = str(e)
         if "already been registered" in err_msg or "duplicate" in err_msg.lower():
-            print(f"  ⟳ {role.upper():12s}  {email}  (already exists, skipped)")
+            print(f"  [SKIP] {role.upper():12s}  {email}  (already exists, skipped)")
         else:
-            print(f"  ✗ {role.upper():12s}  {email}  ERROR: {e}")
+            print(f"  [FAIL] {role.upper():12s}  {email}  ERROR: {e}")
         return None
 
 
 def main():
-    print("═" * 56)
+    print("=" * 56)
     print("  PSG CAS CONNECT — Seeding User Accounts")
-    print("═" * 56)
+    print("=" * 56)
     print()
 
     # ── ADMIN ────────────────────────────────────

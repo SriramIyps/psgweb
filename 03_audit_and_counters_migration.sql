@@ -1,5 +1,5 @@
 -- =====================================================================
--- PSG CAS CONNECT — Migration 03: Audit Log & Department Application Counter
+-- PSG CAS CONNECT — Migration 03: Audit Log, Counters & Review Rules RPCs
 -- =====================================================================
 
 -- 1. AUDIT LOG TABLE
@@ -29,10 +29,19 @@ CREATE TABLE IF NOT EXISTS public.department_counters (
     last_number INTEGER DEFAULT 0
 );
 ALTER TABLE public.department_counters ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON public.department_counters FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.generate_application_number(TEXT) FROM PUBLIC, anon, authenticated;
 GRANT ALL ON public.department_counters TO service_role;
 
--- 3. ATOMIC APPLICATION NUMBER GENERATOR RPC
+-- 3. REVIEW TRACKING COLUMNS FOR APPLICATIONS TABLE
+ALTER TABLE public.applications
+    ADD COLUMN IF NOT EXISTS hod_remarks TEXT,
+    ADD COLUMN IF NOT EXISTS hod_reviewed_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS hod_reviewer TEXT,
+    ADD COLUMN IF NOT EXISTS vp_remarks TEXT,
+    ADD COLUMN IF NOT EXISTS vp_reviewed_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS vp_reviewer TEXT;
+
+-- 4. ATOMIC APPLICATION NUMBER GENERATOR RPC
 CREATE OR REPLACE FUNCTION public.generate_application_number(p_department TEXT)
 RETURNS TEXT AS $$
 DECLARE
@@ -73,8 +82,9 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 REVOKE ALL ON FUNCTION public.generate_application_number(TEXT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.generate_application_number(TEXT) TO service_role;
 
--- 4. ATOMIC AUDITED UPDATE RPCs (Status/Lock changes + Audit log entry in single PL/pgSQL transaction)
+-- 5. ATOMIC AUDITED UPDATE RPCs
 
+-- LOCK RPC
 CREATE OR REPLACE FUNCTION public.rpc_update_application_lock(
     p_app_id BIGINT,
     p_who TEXT,
@@ -84,8 +94,8 @@ DECLARE
     v_old_locked BOOLEAN;
 BEGIN
     SELECT is_locked INTO v_old_locked FROM public.applications WHERE id = p_app_id FOR UPDATE;
-    IF v_old_locked IS NULL THEN
-        RAISE EXCEPTION 'Application with ID % not found', p_app_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'CONNECT_RULE: Application with ID % not found', p_app_id;
     END IF;
 
     UPDATE public.applications SET is_locked = p_is_locked WHERE id = p_app_id;
@@ -98,49 +108,95 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 REVOKE ALL ON FUNCTION public.rpc_update_application_lock(BIGINT, TEXT, BOOLEAN) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.rpc_update_application_lock(BIGINT, TEXT, BOOLEAN) TO service_role;
 
+-- DROP OLD OVERLOADS BEFORE CREATING NEW SIGNATURES
+DROP FUNCTION IF EXISTS public.rpc_update_hod_status(BIGINT, TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.rpc_update_vp_status(BIGINT, TEXT, TEXT, TEXT);
+
+-- HOD REVIEW RPC
 CREATE OR REPLACE FUNCTION public.rpc_update_hod_status(
     p_app_id BIGINT,
     p_who TEXT,
+    p_hod_department TEXT,
     p_status TEXT,
     p_remarks TEXT
 ) RETURNS VOID AS $$
 DECLARE
-    v_old_status TEXT;
+    v_app_dept TEXT;
+    v_old_hod_status TEXT;
     v_vp_status TEXT;
+    v_close_str TEXT;
+    v_close_end TIMESTAMPTZ;
 BEGIN
-    SELECT hod_status, vp_status
-    INTO v_old_status, v_vp_status
+    -- 1. Select & Lock application
+    SELECT department, hod_status, vp_status
+    INTO v_app_dept, v_old_hod_status, v_vp_status
     FROM public.applications
     WHERE id = p_app_id FOR UPDATE;
 
-    IF v_old_status IS NULL THEN
-        RAISE EXCEPTION 'Application with ID % not found', p_app_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'CONNECT_RULE: Application with ID % not found', p_app_id;
     END IF;
 
-    -- Rule 1: HOD decision cannot be changed once VP has acted
-    IF v_vp_status IS NOT NULL AND v_vp_status != 'Pending' THEN
-        RAISE EXCEPTION 'Cannot modify HOD decision after VP review has been completed';
+    -- Treat NULL statuses as 'Pending'
+    v_old_hod_status := COALESCE(v_old_hod_status, 'Pending');
+    v_vp_status := COALESCE(v_vp_status, 'Pending');
+
+    -- 2. Department Check
+    IF p_hod_department IS NULL OR TRIM(p_hod_department) = '' OR v_app_dept IS NULL OR LOWER(TRIM(p_hod_department)) != LOWER(TRIM(v_app_dept)) THEN
+        RAISE EXCEPTION 'CONNECT_RULE: HOD department "%" does not match application department "%"', COALESCE(p_hod_department, ''), COALESCE(v_app_dept, '');
     END IF;
 
-    -- Rule 2: Remarks/reason is mandatory when marking Not Eligible
+    -- 3. Close Date Enforcement (Fail-closed)
+    SELECT value INTO v_close_str FROM public.app_settings WHERE key = 'close_date';
+    IF v_close_str IS NULL OR TRIM(v_close_str) = '' THEN
+        RAISE EXCEPTION 'CONNECT_RULE: Application close date configuration is missing';
+    END IF;
+
+    BEGIN
+        IF POSITION('T' IN v_close_str) > 0 THEN
+            v_close_end := v_close_str::timestamptz;
+        ELSE
+            v_close_end := (SUBSTRING(v_close_str FROM 1 FOR 10) || ' 23:59:59.999999')::timestamp AT TIME ZONE 'Asia/Kolkata';
+        END IF;
+    EXCEPTION WHEN OTHERS THEN
+        RAISE EXCEPTION 'CONNECT_RULE: Application close date configuration is invalid';
+    END;
+
+    IF NOW() <= v_close_end THEN
+        RAISE EXCEPTION 'CONNECT_RULE: HOD review is not allowed before application close date';
+    END IF;
+
+    -- 4. Status Validation & Business Rules
+    IF p_status NOT IN ('Eligible', 'Not Eligible') THEN
+        RAISE EXCEPTION 'CONNECT_RULE: Invalid HOD status "%"; must be Eligible or Not Eligible', p_status;
+    END IF;
+
+    IF v_vp_status != 'Pending' THEN
+        RAISE EXCEPTION 'CONNECT_RULE: Cannot modify HOD decision after VP review has been completed';
+    END IF;
+
     IF p_status = 'Not Eligible' AND (p_remarks IS NULL OR TRIM(p_remarks) = '') THEN
-        RAISE EXCEPTION 'Remarks/reason is mandatory when marking a candidate Not Eligible';
+        RAISE EXCEPTION 'CONNECT_RULE: Remarks/reason is mandatory when marking a candidate Not Eligible';
     END IF;
 
+    -- 5. Update Application
     UPDATE public.applications
     SET hod_status = p_status,
         hod_remarks = p_remarks,
-        hod_reviewed_at = NOW()
+        hod_reviewed_at = NOW(),
+        hod_reviewer = p_who
     WHERE id = p_app_id;
 
+    -- 6. Audit Log Entry
     INSERT INTO public.audit_log (who, action, application_id, old_value, new_value, when_timestamp)
-    VALUES (p_who, 'HOD_REVIEW_UPDATE', p_app_id, v_old_status, p_status, NOW());
+    VALUES (p_who, 'HOD_REVIEW_UPDATE', p_app_id, v_old_hod_status, p_status, NOW());
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
-REVOKE ALL ON FUNCTION public.rpc_update_hod_status(BIGINT, TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.rpc_update_hod_status(BIGINT, TEXT, TEXT, TEXT) TO service_role;
+REVOKE ALL ON FUNCTION public.rpc_update_hod_status(BIGINT, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.rpc_update_hod_status(BIGINT, TEXT, TEXT, TEXT, TEXT) TO service_role;
 
+-- VP REVIEW RPC
 CREATE OR REPLACE FUNCTION public.rpc_update_vp_status(
     p_app_id BIGINT,
     p_who TEXT,
@@ -148,36 +204,47 @@ CREATE OR REPLACE FUNCTION public.rpc_update_vp_status(
     p_remarks TEXT
 ) RETURNS VOID AS $$
 DECLARE
-    v_old_status TEXT;
     v_hod_status TEXT;
+    v_old_vp_status TEXT;
 BEGIN
+    -- 1. Select & Lock application
     SELECT hod_status, vp_status
-    INTO v_hod_status, v_old_status
+    INTO v_hod_status, v_old_vp_status
     FROM public.applications
     WHERE id = p_app_id FOR UPDATE;
 
-    IF v_old_status IS NULL AND v_hod_status IS NULL THEN
-        RAISE EXCEPTION 'Application with ID % not found', p_app_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'CONNECT_RULE: Application with ID % not found', p_app_id;
     END IF;
 
-    -- Rule 1: Candidate must be Eligible by HOD before VP can act
-    IF v_hod_status IS NULL OR v_hod_status != 'Eligible' THEN
-        RAISE EXCEPTION 'Cannot shortlist: candidate has not been marked Eligible by HOD';
+    -- Treat NULL statuses as 'Pending'
+    v_hod_status := COALESCE(v_hod_status, 'Pending');
+    v_old_vp_status := COALESCE(v_old_vp_status, 'Pending');
+
+    -- 2. Status Validation & Business Rules
+    IF p_status NOT IN ('Shortlisted', 'Not Shortlisted') THEN
+        RAISE EXCEPTION 'CONNECT_RULE: Invalid VP status "%"; must be Shortlisted or Not Shortlisted', p_status;
     END IF;
 
-    -- Rule 2: Remarks/reason is mandatory when marking Not Shortlisted
+    IF v_hod_status != 'Eligible' THEN
+        RAISE EXCEPTION 'CONNECT_RULE: Cannot shortlist: candidate has not been marked Eligible by HOD';
+    END IF;
+
     IF p_status = 'Not Shortlisted' AND (p_remarks IS NULL OR TRIM(p_remarks) = '') THEN
-        RAISE EXCEPTION 'Remarks/reason is mandatory when marking a candidate Not Shortlisted';
+        RAISE EXCEPTION 'CONNECT_RULE: Remarks/reason is mandatory when marking a candidate Not Shortlisted';
     END IF;
 
+    -- 3. Update Application
     UPDATE public.applications
     SET vp_status = p_status,
         vp_remarks = p_remarks,
-        vp_reviewed_at = NOW()
+        vp_reviewed_at = NOW(),
+        vp_reviewer = p_who
     WHERE id = p_app_id;
 
+    -- 4. Audit Log Entry
     INSERT INTO public.audit_log (who, action, application_id, old_value, new_value, when_timestamp)
-    VALUES (p_who, 'VP_REVIEW_UPDATE', p_app_id, v_old_status, p_status, NOW());
+    VALUES (p_who, 'VP_REVIEW_UPDATE', p_app_id, v_old_vp_status, p_status, NOW());
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 

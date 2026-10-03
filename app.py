@@ -429,6 +429,8 @@ def submit_application():
     photo_path = save_file(request.files.get("photo"), "photos", ALLOWED_PHOTO)
     resume_file = request.files.get("resume")
     resume_path = save_file(resume_file, "resumes", ALLOWED_DOC) if resume_file else None
+    papers_file = request.files.get("papers")
+    papers_path = save_file(papers_file, "papers", ALLOWED_DOC) if papers_file else None
 
     # Reference ID: Atomic department-scoped counter <DeptCode>/<3-digit number>
     if not existing_app:
@@ -451,20 +453,28 @@ def submit_application():
         "marital_status", "spouse_name", "diff_abled", "nature", "aadhaar_no", "pan_no",
         "native_address", "native_city", "native_state", "native_country", "native_pincode",
         "local_address", "local_city", "local_state", "local_country", "local_pincode",
+        "languages", "education", "teaching_experience", "industry_experience", "pdf_details",
         "achivements", "sci", "scopus", "ugc", "others", "scopus_id", "h_index_google",
         "h_index_scopus", "consultancy", "last_pay", "pay_expected", "join_time",
         "relative", "already_attended", "huk", "comments",
         "name_1", "address_1", "designation_1", "mobile_1", "email_1",
         "name_2", "address_2", "designation_2", "mobile_2", "email_2",
-        "iso_involvement", "iso_details", "naac_iqac_details", "admin_positions_json"
+        "iso_involvement", "iso_details", "naac_iqac_details", "admin_positions_json",
+        "net", "set_slet", "nss", "ncc", "naac", "iqac", "iso",
+        "books_published_national", "books_published_international", "books_edited_national", "books_edited_international",
+        "chapters_published_national", "chapters_published_international", "chapters_edited_national", "chapters_edited_international",
+        "minor_projects", "major_projects", "patents_applied", "patents_published", "patents_granted"
     ]
 
     app_record = {}
     for key in CANDIDATE_EDITABLE_FIELDS:
         if f.get(key) is not None:
             val = f.get(key)
-            if key == "iso_involvement":
-                val = (val == "true" or val is True or val == "on" or val == "1")
+            if key in ("iso_involvement", "net", "set_slet", "nss", "ncc", "naac", "iqac", "iso"):
+                if val in ("true", True, "on", "1"):
+                    val = True
+                elif val in ("false", False, "off", "0"):
+                    val = False
             app_record[key] = val
 
     # Server-controlled fields: strictly forced by backend
@@ -483,6 +493,7 @@ def submit_application():
 
     if photo_path: app_record["photo_path"] = photo_path
     if resume_path: app_record["resume_path"] = resume_path
+    if papers_path: app_record["papers_path"] = papers_path
 
     try:
         if existing_app:
@@ -540,8 +551,9 @@ def my_application():
 def get_applications():
     """Role-scoped application listing.
     - candidate: own applications only
-    - hod: their department only
-    - superadmin/admin: all
+    - hod: their department only (submitted applications, is_locked=True)
+    - superadmin (VP): only submitted, forwarded, Eligible applications
+    - admin: all
     - hr: only vp_status='Shortlisted'
     """
     role = g.current_user["role"]
@@ -558,10 +570,12 @@ def get_applications():
     if role == "candidate":
         query = query.eq("user_id", g.current_user["id"])
     elif role == "hod":
-        query = query.eq("department", g.current_user["department"])
+        query = query.eq("department", g.current_user["department"]).eq("is_locked", True)
+    elif role == "superadmin":
+        query = query.eq("is_locked", True).eq("hod_status", "Eligible")
     elif role == "hr":
         query = query.eq("vp_status", "Shortlisted")
-    # admin & superadmin see all
+    # admin sees all
 
     # ── Optional filters ──
     if dept_filter:
@@ -581,7 +595,11 @@ def get_applications():
 
     try:
         res = query.execute()
-        return jsonify(applications=res.data or [])
+        apps = res.data or []
+        if role == "superadmin":
+            # VP only sees candidates from departments that have been forwarded by HOD
+            apps = [a for a in apps if a.get("hod_forwarded_at") is not None]
+        return jsonify(applications=apps)
     except Exception as e:
         print(f"[DB Error] {e}")
         return jsonify(applications=[], error=str(e)), 500
@@ -628,32 +646,24 @@ def hod_review(app_id):
     if new_status not in ("Eligible", "Not Eligible"):
         return jsonify(error="hod_status must be 'Eligible' or 'Not Eligible'"), 400
 
-    # Verify this application is in the HOD's department
-    try:
-        app_res = sb_admin.table("applications").select("department, hod_status").eq("id", app_id).limit(1).execute()
-        if not app_res.data:
-            return jsonify(error="Application not found"), 404
-        if app_res.data[0]["department"] != g.current_user["department"]:
-            return jsonify(error="This application is not in your department"), 403
-        old_status = app_res.data[0].get("hod_status")
-    except Exception as e:
-        print(f"[ERROR] HOD review department check failed: {e}")
-        return jsonify(error=f"Database error checking department: {e}"), 503
+    remarks = (data.get("admin_notes") or data.get("hod_remarks") or "").strip()
 
     try:
         sb_admin.rpc("rpc_update_hod_status", {
             "p_app_id": app_id,
             "p_who": g.current_user["email"],
+            "p_hod_department": g.current_user.get("department"),
             "p_status": new_status,
-            "p_remarks": data.get("admin_notes", "")
+            "p_remarks": remarks
         }).execute()
         return jsonify(success=True, hod_status=new_status)
     except Exception as e:
         err_msg = str(e)
-        if any(term in err_msg.lower() for term in ["mandatory", "cannot modify", "not found"]):
-            return jsonify(error=err_msg), 400
+        if "CONNECT_RULE:" in err_msg:
+            clean_err = err_msg.split("CONNECT_RULE:")[1].split("\n")[0].strip()
+            return jsonify(error=clean_err), 400
         print(f"[ERROR] HOD review update failed: {e}")
-        return jsonify(error=f"Failed to update HOD review: {e}"), 503
+        return jsonify(error="Review operation failed. Please try again or contact administrator."), 400
 
 
 # ── VP REVIEW ────────────────────────────────
@@ -669,20 +679,23 @@ def vp_review(app_id):
     if new_status not in ("Shortlisted", "Not Shortlisted"):
         return jsonify(error="vp_status must be 'Shortlisted' or 'Not Shortlisted'"), 400
 
+    remarks = (data.get("admin_notes") or data.get("vp_remarks") or "").strip()
+
     try:
         sb_admin.rpc("rpc_update_vp_status", {
             "p_app_id": app_id,
             "p_who": g.current_user["email"],
             "p_status": new_status,
-            "p_remarks": data.get("admin_notes", "")
+            "p_remarks": remarks
         }).execute()
         return jsonify(success=True, vp_status=new_status)
     except Exception as e:
         err_msg = str(e)
-        if any(term in err_msg.lower() for term in ["cannot shortlist", "mandatory", "not found"]):
-            return jsonify(error=err_msg), 400
+        if "CONNECT_RULE:" in err_msg:
+            clean_err = err_msg.split("CONNECT_RULE:")[1].split("\n")[0].strip()
+            return jsonify(error=clean_err), 400
         print(f"[ERROR] VP review update failed: {e}")
-        return jsonify(error=f"Failed to update VP review: {e}"), 503
+        return jsonify(error="Review operation failed. Please try again or contact administrator."), 400
 
 
 # ── ADMIN: update any application ────────────
@@ -962,7 +975,7 @@ def generate_application_pdf(app_id):
         elements.append(Paragraph(f"FACULTY RECRUITMENT APPLICATION — {app_data.get('app_uuid', '')}", subtitle_style))
         elements.append(Spacer(1, 8))
 
-        # Personal Details Table
+        # Personal & Contact Details Table
         personal_data = [
             [Paragraph("<b>Application Ref No:</b>", table_cell_bold), Paragraph(str(app_data.get('app_uuid', '')), table_cell),
              Paragraph("<b>Date Submitted:</b>", table_cell_bold), Paragraph(str(app_data.get('submitted_at', '')[:10] if app_data.get('submitted_at') else ''), table_cell)],
@@ -972,6 +985,14 @@ def generate_application_pdf(app_id):
              Paragraph("<b>Department:</b>", table_cell_bold), Paragraph(str(app_data.get('department', '')), table_cell)],
             [Paragraph("<b>Email:</b>", table_cell_bold), Paragraph(str(app_data.get('email', '')), table_cell),
              Paragraph("<b>Mobile No:</b>", table_cell_bold), Paragraph(str(app_data.get('mobile_no', '')), table_cell)],
+            [Paragraph("<b>Father's / Mother's Name:</b>", table_cell_bold), Paragraph(f"{app_data.get('father_name','')} / {app_data.get('mother_name','')}", table_cell),
+             Paragraph("<b>Marital Status:</b>", table_cell_bold), Paragraph(f"{app_data.get('marital_status','')} (Spouse: {app_data.get('spouse_name','N/A')})", table_cell)],
+            [Paragraph("<b>Differently Abled:</b>", table_cell_bold), Paragraph(f"{app_data.get('diff_abled','No')} ({app_data.get('nature','N/A')})", table_cell),
+             Paragraph("<b>Aadhaar / PAN:</b>", table_cell_bold), Paragraph(f"{app_data.get('aadhaar_no','')} / {app_data.get('pan_no','')}", table_cell)],
+            [Paragraph("<b>Permanent Address:</b>", table_cell_bold), Paragraph(f"{app_data.get('native_address','')}, {app_data.get('native_city','')}, {app_data.get('native_state','')}, {app_data.get('native_country','')} - {app_data.get('native_pincode','')}", table_cell),
+             Paragraph("<b>Local Address:</b>", table_cell_bold), Paragraph(f"{app_data.get('local_address','')}, {app_data.get('local_city','')}, {app_data.get('local_state','')}, {app_data.get('local_country','')} - {app_data.get('local_pincode','')}", table_cell)],
+            [Paragraph("<b>Last Pay / Expected:</b>", table_cell_bold), Paragraph(f"₹{app_data.get('last_pay','0')} / ₹{app_data.get('pay_expected','0')}", table_cell),
+             Paragraph("<b>Join Time Required:</b>", table_cell_bold), Paragraph(str(app_data.get('join_time','N/A')), table_cell)],
         ]
         t_pers = Table(personal_data, colWidths=[1.3*inch, 2.3*inch, 1.3*inch, 2.3*inch])
         t_pers.setStyle(TableStyle([
@@ -980,6 +1001,21 @@ def generate_application_pdf(app_id):
             ('PADDING', (0,0), (-1,-1), 4),
         ]))
         elements.append(t_pers)
+        elements.append(Spacer(1, 10))
+
+        # References Section
+        elements.append(Paragraph("Professional References", sec_heading))
+        ref_data = [
+            [Paragraph("<b>Ref 1:</b> {}".format(app_data.get('name_1','N/A')), table_cell_bold), Paragraph("Desig: {} | Mob: {} | Email: {}<br/>Addr: {}".format(app_data.get('designation_1',''), app_data.get('mobile_1',''), app_data.get('email_1',''), app_data.get('address_1','')), table_cell)],
+            [Paragraph("<b>Ref 2:</b> {}".format(app_data.get('name_2','N/A')), table_cell_bold), Paragraph("Desig: {} | Mob: {} | Email: {}<br/>Addr: {}".format(app_data.get('designation_2',''), app_data.get('mobile_2',''), app_data.get('email_2',''), app_data.get('address_2','')), table_cell)],
+        ]
+        t_ref = Table(ref_data, colWidths=[2.2*inch, 5.0*inch])
+        t_ref.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+            ('PADDING', (0,0), (-1,-1), 4),
+        ]))
+        elements.append(t_ref)
         elements.append(Spacer(1, 10))
 
         # Educational Qualifications
@@ -1100,7 +1136,7 @@ def get_stats():
         query = sb_admin.table("applications").select("id, position, submitted_at, hod_status, vp_status, department")
 
         if role == "hod":
-            query = query.eq("department", g.current_user["department"])
+            query = query.eq("department", g.current_user["department"]).eq("is_locked", True)
         elif role == "hr":
             query = query.eq("vp_status", "Shortlisted")
         elif role == "candidate":
@@ -1172,9 +1208,11 @@ def export_csv():
         return jsonify(error="No data"), 404
 
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=rows[0].keys())
-    writer.writeheader()
-    writer.writerows(rows)
+    fieldnames = list(rows[0].keys())
+    writer = csv.writer(output)
+    writer.writerow(fieldnames)
+    for r in rows:
+        writer.writerow([sanitize_csv_cell(r.get(f)) for f in fieldnames])
 
     from flask import Response
     return Response(
@@ -1184,9 +1222,582 @@ def export_csv():
     )
 
 
+
 # ═════════════════════════════════════════════
-# ADMIN: USER MANAGEMENT
+# CSV SAFETY & REPORT CONTEXT HELPERS
 # ═════════════════════════════════════════════
+
+def sanitize_csv_cell(val):
+    """CSV formula injection safety helper: prepends a single quote if string begins with =, +, -, or @."""
+    if val is None:
+        return ""
+    s = str(val)
+    if s and s[0] in ('=', '+', '-', '@'):
+        return "'" + s
+    return s
+
+
+def _get_report_context():
+    """Extract department, stamped HOD name, and IST timestamp for reports.
+    - HOD role: department ALWAYS comes from g.current_user['department']
+    - admin/superadmin role: department comes from request parameter `department`
+    """
+    user = g.current_user
+    role = user["role"]
+
+    if role not in ("hod", "admin", "superadmin"):
+        return None, (jsonify(error=f"Role '{role}' is not authorized to generate reports"), 403)
+
+    if role == "hod":
+        dept = user.get("department")
+        if not dept:
+            return None, (jsonify(error="No department assigned to HOD profile"), 400)
+        hod_name = f"{user.get('full_name')} ({user.get('email')})"
+    else:  # admin or superadmin
+        dept = (request.args.get("department") or "").strip()
+        if not dept:
+            return None, (jsonify(error="Query parameter 'department' is required for admin report generation"), 400)
+
+        # Look up HOD profile for department
+        try:
+            p_res = sb_admin.table("profiles").select("full_name, email").eq("role", "hod").eq("department", dept).limit(1).execute()
+            if p_res.data and len(p_res.data) > 0:
+                hod_name = f"{p_res.data[0].get('full_name')} ({p_res.data[0].get('email')})"
+            else:
+                hod_name = f"HOD Department of {dept}"
+        except Exception:
+            hod_name = f"HOD Department of {dept}"
+
+    now_str = datetime.now(IST).strftime("%d-%b-%Y %I:%M %p IST")
+    return {
+        "department": dept,
+        "hod_name": hod_name,
+        "timestamp": now_str,
+    }, None
+
+
+# ═════════════════════════════════════════════
+# HOD SCRUTINY & VP DEPARTMENT ROUTES
+# ═════════════════════════════════════════════
+
+@app.route("/api/hod/applications", methods=["GET"])
+@role_required("hod")
+def hod_applications():
+    """HOD Scrutiny view for assigned department."""
+    dept = g.current_user.get("department")
+    if not dept:
+        return jsonify(error="No department assigned to HOD profile"), 400
+
+    # 1. Close date check
+    try:
+        sett_res = sb_admin.table("app_settings").select("value").eq("key", "close_date").limit(1).execute()
+        close_str = sett_res.data[0]["value"] if (sett_res.data and len(sett_res.data) > 0) else None
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch close_date: {e}")
+        return jsonify(error="Failed to verify application window close date"), 503
+
+    if not close_str:
+        return jsonify(error="Close date setting is missing in system configuration"), 500
+
+    try:
+        if "T" in close_str:
+            close_dt = datetime.fromisoformat(close_str)
+            if close_dt.tzinfo is None:
+                close_dt = close_dt.replace(tzinfo=IST)
+        else:
+            close_dt = datetime.strptime(close_str[:10] + " 23:59:59", "%Y-%m-%d %H:%M:%S").replace(tzinfo=IST)
+    except Exception as e:
+        print(f"[ERROR] Invalid close date format '{close_str}': {e}")
+        return jsonify(error="Invalid close date configuration"), 500
+
+    now_ist = datetime.now(IST)
+    portal_open = now_ist <= close_dt
+
+    if portal_open:
+        return jsonify(
+            portal_open=True,
+            close_date=close_str[:10],
+            department=dept,
+            is_forwarded=False,
+            forwarded_at=None,
+            forwarded_by=None,
+            applications=[],
+            stats={"total_submitted": 0, "pending_count": 0, "eligible_count": 0, "not_eligible_count": 0},
+            can_forward=False,
+            message=f"Scrutiny opens after {close_str[:10]}"
+        )
+
+    # 2. Fetch submitted applications for HOD department
+    try:
+        apps_res = sb_admin.table("applications").select("*").eq("department", dept).eq("is_locked", True).order("submitted_at", desc=True).execute()
+        apps = apps_res.data or []
+    except Exception as e:
+        print(f"[ERROR] HOD applications fetch failed: {e}")
+        return jsonify(error=f"Database error fetching applications: {e}"), 503
+
+    is_forwarded = any(a.get("hod_forwarded_at") is not None for a in apps) if apps else False
+    forwarded_at = next((a.get("hod_forwarded_at") for a in apps if a.get("hod_forwarded_at")), None)
+    forwarded_by = next((a.get("hod_forwarded_by") for a in apps if a.get("hod_forwarded_by")), None)
+
+    total_submitted = len(apps)
+    pending_count = sum(1 for a in apps if not a.get("hod_status") or a.get("hod_status") == "Pending")
+    eligible_count = sum(1 for a in apps if a.get("hod_status") == "Eligible")
+    not_eligible_count = sum(1 for a in apps if a.get("hod_status") == "Not Eligible")
+
+    can_forward = (total_submitted > 0) and (pending_count == 0) and (not is_forwarded) and (not portal_open)
+
+    return jsonify(
+        portal_open=False,
+        close_date=close_str[:10],
+        department=dept,
+        is_forwarded=is_forwarded,
+        forwarded_at=forwarded_at,
+        forwarded_by=forwarded_by,
+        applications=apps,
+        stats={
+            "total_submitted": total_submitted,
+            "pending_count": pending_count,
+            "eligible_count": eligible_count,
+            "not_eligible_count": not_eligible_count,
+        },
+        can_forward=can_forward
+    )
+
+
+@app.route("/api/hod/forward", methods=["POST"])
+@role_required("hod")
+def hod_forward():
+    """HOD forwards department scrutinised applications to VP."""
+    dept = g.current_user.get("department")
+    if not dept:
+        return jsonify(error="No department assigned to HOD profile"), 400
+
+    try:
+        sb_admin.rpc("rpc_hod_forward_department", {
+            "p_department": dept,
+            "p_who": g.current_user["email"]
+        }).execute()
+
+        return jsonify(success=True, message=f"Department '{dept}' successfully forwarded to Vice Principal.")
+    except Exception as e:
+        err_msg = str(e)
+        if "CONNECT_RULE:" in err_msg:
+            clean_err = err_msg.split("CONNECT_RULE:")[1].split("\n")[0].strip()
+            return jsonify(error=clean_err), 400
+        print(f"[ERROR] HOD forward failed: {e}")
+        return jsonify(error="Failed to forward department. Please try again."), 503
+
+
+# ═════════════════════════════════════════════
+# STAMPED PDF & CSV REPORT ROUTES (HOD & ADMIN)
+# ═════════════════════════════════════════════
+
+@app.route("/api/reports/scrutiny-pdf", methods=["GET"])
+@app.route("/api/hod/scrutiny-pdf", methods=["GET"])
+@auth_required
+def report_scrutiny_pdf():
+    """Full HOD Scrutiny PDF report stamped with Dept, Date (IST) & HOD Name."""
+    ctx, err = _get_report_context()
+    if err:
+        return err
+    dept = ctx["department"]
+
+    try:
+        apps_res = sb_admin.table("applications").select("*").eq("department", dept).eq("is_locked", True).order("name").execute()
+        apps = apps_res.data or []
+    except Exception as e:
+        return jsonify(error=f"Database error fetching applications: {e}"), 503
+
+    import io
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.units import inch
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=landscape(A4),
+        rightMargin=20, leftMargin=20, topMargin=25, bottomMargin=25
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=14, textColor=colors.HexColor('#002e5b'), alignment=1, spaceAfter=2)
+    subtitle_style = ParagraphStyle('SubTitle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, textColor=colors.HexColor('#334155'), alignment=1, spaceAfter=8)
+    table_hdr = ParagraphStyle('TH', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, leading=10, textColor=colors.HexColor('#1e293b'))
+    table_cell = ParagraphStyle('TC', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=10)
+    table_cell_bold = ParagraphStyle('TCB', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, leading=10)
+
+    elements = []
+    elements.append(Paragraph("PSG COLLEGE OF ARTS & SCIENCE", title_style))
+    elements.append(Paragraph(f"HOD CANDIDATE SCRUTINY REPORT — DEPARTMENT OF {dept.upper()}", subtitle_style))
+    elements.append(Paragraph(f"Department: {dept} | Generated: {ctx['timestamp']} | HOD: {ctx['hod_name']}", ParagraphStyle('Sub', parent=styles['Normal'], fontSize=8, alignment=1, spaceAfter=10)))
+
+    headers = [
+        Paragraph("<b>#</b>", table_hdr),
+        Paragraph("<b>App Ref</b>", table_hdr),
+        Paragraph("<b>Candidate Name & Contact</b>", table_hdr),
+        Paragraph("<b>Position</b>", table_hdr),
+        Paragraph("<b>Qualification Summary</b>", table_hdr),
+        Paragraph("<b>HOD Decision</b>", table_hdr),
+        Paragraph("<b>Remarks / Reason</b>", table_hdr),
+    ]
+
+    table_rows = [headers]
+    for idx, a in enumerate(apps, 1):
+        edu_str = ""
+        try:
+            edu_raw = a.get("education")
+            edu_list = json.loads(edu_raw) if isinstance(edu_raw, str) else (edu_raw or [])
+            if isinstance(edu_list, list):
+                edu_parts = [f"{e.get('degree','')} ({e.get('qualification','')})" for e in edu_list if e.get('degree')]
+                edu_str = ", ".join(edu_parts)
+        except Exception:
+            edu_str = ""
+
+        status_text = a.get("hod_status") or "Pending"
+        status_color = "#16a34a" if status_text == "Eligible" else ("#dc2626" if status_text == "Not Eligible" else "#d97706")
+        status_para = Paragraph(f"<font color='{status_color}'><b>{status_text}</b></font>", table_cell)
+
+        table_rows.append([
+            Paragraph(str(idx), table_cell),
+            Paragraph(str(a.get("app_uuid","")), table_cell_bold),
+            Paragraph(f"<b>{a.get('name','')}</b><br/>{a.get('email','')}<br/>{a.get('mobile_no','')}", table_cell),
+            Paragraph(str(a.get("position","")), table_cell),
+            Paragraph(edu_str or "N/A", table_cell),
+            status_para,
+            Paragraph(str(a.get("hod_remarks","") or "-"), table_cell),
+        ])
+
+    t = Table(table_rows, colWidths=[0.3*inch, 1.2*inch, 2.2*inch, 1.5*inch, 2.3*inch, 1.1*inch, 2.4*inch])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#e2e8f0')),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+        ('PADDING', (0,0), (-1,-1), 4),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+    ]))
+    elements.append(t)
+    elements.append(Spacer(1, 15))
+    elements.append(Paragraph("<b>Declaration:</b> The scrutiny of all received applications for the above department has been conducted strictly in accordance with institutional and UGC norms.", ParagraphStyle('Decl', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#475569'))))
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    from flask import Response
+    safe_dept = dept.replace(" ", "_")
+    return Response(
+        buffer.getvalue(),
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=HOD_Scrutiny_Report_{safe_dept}.pdf"},
+    )
+
+
+@app.route("/api/reports/eligible-pdf", methods=["GET"])
+@auth_required
+def report_eligible_pdf():
+    """Eligible Candidates PDF report stamped with Dept, Date (IST) & HOD Name."""
+    ctx, err = _get_report_context()
+    if err:
+        return err
+    dept = ctx["department"]
+
+    try:
+        apps_res = sb_admin.table("applications").select("*").eq("department", dept).eq("is_locked", True).eq("hod_status", "Eligible").order("name").execute()
+        apps = apps_res.data or []
+    except Exception as e:
+        return jsonify(error=f"Database error fetching eligible applications: {e}"), 503
+
+    import io
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.units import inch
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=landscape(A4),
+        rightMargin=20, leftMargin=20, topMargin=25, bottomMargin=25
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=14, textColor=colors.HexColor('#059669'), alignment=1, spaceAfter=2)
+    subtitle_style = ParagraphStyle('SubTitle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, textColor=colors.HexColor('#334155'), alignment=1, spaceAfter=8)
+    table_hdr = ParagraphStyle('TH', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, leading=10, textColor=colors.HexColor('#1e293b'))
+    table_cell = ParagraphStyle('TC', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=10)
+    table_cell_bold = ParagraphStyle('TCB', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, leading=10)
+
+    elements = []
+    elements.append(Paragraph("PSG COLLEGE OF ARTS & SCIENCE", title_style))
+    elements.append(Paragraph(f"SCRUTINY ELIGIBLE CANDIDATES LIST — DEPARTMENT OF {dept.upper()}", subtitle_style))
+    elements.append(Paragraph(f"Department: {dept} | Generated: {ctx['timestamp']} | HOD: {ctx['hod_name']}", ParagraphStyle('Sub', parent=styles['Normal'], fontSize=8, alignment=1, spaceAfter=10)))
+
+    headers = [
+        Paragraph("<b>#</b>", table_hdr),
+        Paragraph("<b>App Ref</b>", table_hdr),
+        Paragraph("<b>Candidate Name & Contact</b>", table_hdr),
+        Paragraph("<b>Position</b>", table_hdr),
+        Paragraph("<b>Qualification Summary</b>", table_hdr),
+        Paragraph("<b>HOD Status</b>", table_hdr),
+        Paragraph("<b>Reviewed Date</b>", table_hdr),
+    ]
+
+    table_rows = [headers]
+    for idx, a in enumerate(apps, 1):
+        edu_str = ""
+        try:
+            edu_raw = a.get("education")
+            edu_list = json.loads(edu_raw) if isinstance(edu_raw, str) else (edu_raw or [])
+            if isinstance(edu_list, list):
+                edu_parts = [f"{e.get('degree','')} ({e.get('qualification','')})" for e in edu_list if e.get('degree')]
+                edu_str = ", ".join(edu_parts)
+        except Exception:
+            edu_str = ""
+
+        rev_date = a.get("hod_reviewed_at")[:10] if a.get("hod_reviewed_at") else "-"
+
+        table_rows.append([
+            Paragraph(str(idx), table_cell),
+            Paragraph(str(a.get("app_uuid","")), table_cell_bold),
+            Paragraph(f"<b>{a.get('name','')}</b><br/>{a.get('email','')}<br/>{a.get('mobile_no','')}", table_cell),
+            Paragraph(str(a.get("position","")), table_cell),
+            Paragraph(edu_str or "N/A", table_cell),
+            Paragraph("<font color='#059669'><b>Eligible</b></font>", table_cell),
+            Paragraph(str(rev_date), table_cell),
+        ])
+
+    t = Table(table_rows, colWidths=[0.3*inch, 1.3*inch, 2.4*inch, 1.8*inch, 2.7*inch, 1.1*inch, 1.4*inch])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#d1fae5')),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#a7f3d0')),
+        ('PADDING', (0,0), (-1,-1), 4),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+    ]))
+    elements.append(t)
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    from flask import Response
+    safe_dept = dept.replace(" ", "_")
+    return Response(
+        buffer.getvalue(),
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=Eligible_Candidates_{safe_dept}.pdf"},
+    )
+
+
+@app.route("/api/reports/not-eligible-pdf", methods=["GET"])
+@auth_required
+def report_not_eligible_pdf():
+    """Not Eligible Candidates PDF report with mandatory HOD reasons, stamped with Dept, Date (IST) & HOD Name."""
+    ctx, err = _get_report_context()
+    if err:
+        return err
+    dept = ctx["department"]
+
+    try:
+        apps_res = sb_admin.table("applications").select("*").eq("department", dept).eq("is_locked", True).eq("hod_status", "Not Eligible").order("name").execute()
+        apps = apps_res.data or []
+    except Exception as e:
+        return jsonify(error=f"Database error fetching not eligible applications: {e}"), 503
+
+    import io
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.units import inch
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=landscape(A4),
+        rightMargin=20, leftMargin=20, topMargin=25, bottomMargin=25
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=14, textColor=colors.HexColor('#dc2626'), alignment=1, spaceAfter=2)
+    subtitle_style = ParagraphStyle('SubTitle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, textColor=colors.HexColor('#334155'), alignment=1, spaceAfter=8)
+    table_hdr = ParagraphStyle('TH', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, leading=10, textColor=colors.HexColor('#1e293b'))
+    table_cell = ParagraphStyle('TC', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=10)
+    table_cell_bold = ParagraphStyle('TCB', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, leading=10)
+
+    elements = []
+    elements.append(Paragraph("PSG COLLEGE OF ARTS & SCIENCE", title_style))
+    elements.append(Paragraph(f"SCRUTINY NOT ELIGIBLE CANDIDATES LIST — DEPARTMENT OF {dept.upper()}", subtitle_style))
+    elements.append(Paragraph(f"Department: {dept} | Generated: {ctx['timestamp']} | HOD: {ctx['hod_name']}", ParagraphStyle('Sub', parent=styles['Normal'], fontSize=8, alignment=1, spaceAfter=10)))
+
+    headers = [
+        Paragraph("<b>#</b>", table_hdr),
+        Paragraph("<b>App Ref</b>", table_hdr),
+        Paragraph("<b>Candidate Name & Contact</b>", table_hdr),
+        Paragraph("<b>Position</b>", table_hdr),
+        Paragraph("<b>Qualification Summary</b>", table_hdr),
+        Paragraph("<b>HOD Mandated Reason / Remarks</b>", table_hdr),
+    ]
+
+    table_rows = [headers]
+    for idx, a in enumerate(apps, 1):
+        edu_str = ""
+        try:
+            edu_raw = a.get("education")
+            edu_list = json.loads(edu_raw) if isinstance(edu_raw, str) else (edu_raw or [])
+            if isinstance(edu_list, list):
+                edu_parts = [f"{e.get('degree','')} ({e.get('qualification','')})" for e in edu_list if e.get('degree')]
+                edu_str = ", ".join(edu_parts)
+        except Exception:
+            edu_str = ""
+
+        table_rows.append([
+            Paragraph(str(idx), table_cell),
+            Paragraph(str(a.get("app_uuid","")), table_cell_bold),
+            Paragraph(f"<b>{a.get('name','')}</b><br/>{a.get('email','')}<br/>{a.get('mobile_no','')}", table_cell),
+            Paragraph(str(a.get("position","")), table_cell),
+            Paragraph(edu_str or "N/A", table_cell),
+            Paragraph(f"<font color='#dc2626'><b>{a.get('hod_remarks','') or 'Reason missing'}</b></font>", table_cell),
+        ])
+
+    t = Table(table_rows, colWidths=[0.3*inch, 1.3*inch, 2.3*inch, 1.6*inch, 2.3*inch, 3.2*inch])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#fee2e2')),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#fca5a5')),
+        ('PADDING', (0,0), (-1,-1), 4),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+    ]))
+    elements.append(t)
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    from flask import Response
+    safe_dept = dept.replace(" ", "_")
+    return Response(
+        buffer.getvalue(),
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=Not_Eligible_Candidates_{safe_dept}.pdf"},
+    )
+
+
+@app.route("/api/reports/eligible-csv", methods=["GET"])
+@app.route("/api/hod/eligible-csv", methods=["GET"])
+@auth_required
+def report_eligible_csv():
+    """Stream CSV of Eligible candidates with formula injection safety, stamped metadata header."""
+    ctx, err = _get_report_context()
+    if err:
+        return err
+    dept = ctx["department"]
+
+    try:
+        res = sb_admin.table("applications").select("*").eq("department", dept).eq("is_locked", True).eq("hod_status", "Eligible").order("name").execute()
+        rows = res.data or []
+    except Exception as e:
+        return jsonify(error=f"Database error fetching eligible candidates: {e}"), 503
+
+    import io
+    import csv
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["# PSG CAS CONNECT — ELIGIBLE CANDIDATES REPORT"])
+    writer.writerow(["# Department", ctx["department"]])
+    writer.writerow(["# Generated Date (IST)", ctx["timestamp"]])
+    writer.writerow(["# HOD", ctx["hod_name"]])
+    writer.writerow([])
+
+    fieldnames = ["app_uuid", "name", "email", "mobile_no", "position", "department", "hod_status", "hod_remarks", "hod_reviewed_at", "hod_reviewer"]
+    writer.writerow(fieldnames)
+
+    for r in rows:
+        row_vals = [sanitize_csv_cell(r.get(f)) for f in fieldnames]
+        writer.writerow(row_vals)
+
+    from flask import Response
+    safe_dept = dept.replace(" ", "_")
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=Eligible_Candidates_{safe_dept}.csv"},
+    )
+
+
+@app.route("/api/reports/not-eligible-csv", methods=["GET"])
+@auth_required
+def report_not_eligible_csv():
+    """Stream CSV of Not Eligible candidates (with HOD reasons) with formula injection safety, stamped metadata header."""
+    ctx, err = _get_report_context()
+    if err:
+        return err
+    dept = ctx["department"]
+
+    try:
+        res = sb_admin.table("applications").select("*").eq("department", dept).eq("is_locked", True).eq("hod_status", "Not Eligible").order("name").execute()
+        rows = res.data or []
+    except Exception as e:
+        return jsonify(error=f"Database error fetching not eligible candidates: {e}"), 503
+
+    import io
+    import csv
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["# PSG CAS CONNECT — NOT ELIGIBLE CANDIDATES REPORT"])
+    writer.writerow(["# Department", ctx["department"]])
+    writer.writerow(["# Generated Date (IST)", ctx["timestamp"]])
+    writer.writerow(["# HOD", ctx["hod_name"]])
+    writer.writerow([])
+
+    fieldnames = ["app_uuid", "name", "email", "mobile_no", "position", "department", "hod_status", "hod_remarks", "hod_reviewed_at", "hod_reviewer"]
+    writer.writerow(fieldnames)
+
+    for r in rows:
+        row_vals = [sanitize_csv_cell(r.get(f)) for f in fieldnames]
+        writer.writerow(row_vals)
+
+    from flask import Response
+    safe_dept = dept.replace(" ", "_")
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=Not_Eligible_Candidates_{safe_dept}.csv"},
+    )
+
+
+@app.route("/api/vp/departments", methods=["GET"])
+@role_required("superadmin")
+def vp_departments():
+    """List department forwarding status for Vice Principal."""
+    try:
+        res = sb_admin.table("applications").select("department, hod_forwarded_at, hod_forwarded_by, hod_status").eq("is_locked", True).execute()
+        apps = res.data or []
+
+        dept_map = {}
+        for a in apps:
+            d = a.get("department")
+            if not d:
+                continue
+            if d not in dept_map:
+                dept_map[d] = {
+                    "department": d,
+                    "is_forwarded": False,
+                    "forwarded_at": None,
+                    "forwarded_by": None,
+                    "total_submitted": 0,
+                    "eligible_count": 0,
+                }
+            dept_map[d]["total_submitted"] += 1
+            if a.get("hod_status") == "Eligible":
+                dept_map[d]["eligible_count"] += 1
+            if a.get("hod_forwarded_at"):
+                dept_map[d]["is_forwarded"] = True
+                dept_map[d]["forwarded_at"] = a.get("hod_forwarded_at")
+                dept_map[d]["forwarded_by"] = a.get("hod_forwarded_by")
+
+        dept_list = sorted(list(dept_map.values()), key=lambda x: x["department"])
+        return jsonify(departments=dept_list)
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch VP departments: {e}")
+        return jsonify(error=f"Database error fetching department status: {e}"), 503
 
 @app.route("/api/admin/users", methods=["GET"])
 @role_required("admin")

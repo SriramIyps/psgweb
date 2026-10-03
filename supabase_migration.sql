@@ -48,6 +48,9 @@ ALTER TABLE public.applications ADD COLUMN IF NOT EXISTS hod_status TEXT DEFAULT
 ALTER TABLE public.applications ADD COLUMN IF NOT EXISTS vp_status TEXT DEFAULT 'Pending';
 ALTER TABLE public.applications ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT false;
 
+-- Idempotent step: Lock pre-existing anonymous submissions without user_id
+UPDATE public.applications SET is_locked = true WHERE user_id IS NULL AND is_locked IS NOT TRUE;
+
 -- Add check constraints (safe with IF NOT EXISTS via DO block)
 DO $$
 BEGIN
@@ -125,11 +128,8 @@ CREATE POLICY "Admin manages profiles" ON public.profiles
 -- 6. APPLICATIONS RLS POLICIES
 -- ─────────────────────────────────────────────
 
--- 6a. Public (anon) can still submit applications
+-- 6a. Drop legacy anon submit policy if exists
 DROP POLICY IF EXISTS "Anon submit" ON public.applications;
-CREATE POLICY "Anon submit" ON public.applications
-    FOR INSERT TO anon
-    WITH CHECK (true);
 
 -- 6b. Candidate sees only own applications
 DROP POLICY IF EXISTS "Candidate sees own apps" ON public.applications;
