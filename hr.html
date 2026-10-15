@@ -35,6 +35,8 @@
     .ctrl-bar input { padding: .4375rem .75rem; border: 1px solid #e2e8f0; border-radius: .5rem; font-size: .8125rem; outline: none; width: 220px; }
     .btn-refresh { padding: .4375rem .875rem; background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; border-radius: .5rem; font-size: .8125rem; cursor: pointer; }
     .btn-refresh:hover { background: #e2e8f0; }
+    .btn-export { padding: .4375rem 1rem; background: var(--maroon); color: #fff; border: none; border-radius: .5rem; font-size: .8125rem; font-weight: 500; cursor: pointer; }
+    .btn-export:hover { background: var(--maroon-dark); }
     table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
     thead th { background: #f8fafc; padding: .625rem 1rem; text-align: left; font-weight: 600; color: #475569; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
     tbody tr { border-bottom: 1px solid #f1f5f9; transition: background .1s; }
@@ -64,6 +66,12 @@
     .file-link { color: var(--maroon); font-size: .8125rem; }
     .info-banner { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: .75rem; padding: 1rem 1.25rem; margin-bottom: 1.5rem; font-size: .8125rem; color: #1e40af; display: flex; align-items: center; gap: .75rem; }
     .info-banner i { font-size: 1.125rem; }
+    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 999; color: #fff; padding: .75rem 1.25rem; border-radius: .75rem; font-size: .875rem; font-weight: 500; box-shadow: 0 10px 30px rgba(0,0,0,.2); display: none; }
+    .toast.show { display: block; animation: slideIn .2s ease; }
+    @keyframes slideIn { from{transform:translateX(100%)} to{transform:translateX(0)} }
+    .toast-success { background: #059669; }
+    .toast-error { background: #dc2626; }
+    .toast-info { background: #3b82f6; }
   </style>
 </head>
 <body>
@@ -71,7 +79,7 @@
 <div class="topbar">
   <div class="topbar-left">
     <img src="assets/psgcas logo-2.png" alt="PSG CAS">
-    <span class="topbar-brand">PSG CAS <span>HR Portal</span></span>
+    <span class="topbar-brand">PSG CAS <span>HR Portal (SF Office)</span></span>
   </div>
   <div class="topbar-right">
     <span class="role-badge">HR</span>
@@ -82,11 +90,11 @@
 
 <main class="main">
   <p class="page-title">Shortlisted Candidates</p>
-  <p class="page-sub">View candidates who have been shortlisted by the Vice Principal.</p>
+  <p class="page-sub">View candidates shortlisted and forwarded to HR by the Vice Principal.</p>
 
   <div class="info-banner">
     <i class="fa-solid fa-circle-info"></i>
-    You can only view candidates with VP status "Shortlisted". Interview scheduling will be available in a future update.
+    HR receives candidate details strictly after Vice Principal forwarding is completed for the department.
   </div>
 
   <div class="stats-grid">
@@ -95,10 +103,11 @@
 
   <div class="table-card">
     <div class="table-header">
-      <h3>Shortlisted <span id="count-label" style="color:#94a3b8;font-weight:400;font-size:.875rem;"></span></h3>
+      <h3>Shortlisted Candidates <span id="count-label" style="color:#94a3b8;font-weight:400;font-size:.875rem;"></span></h3>
       <div class="ctrl-bar">
         <input type="text" id="search-input" placeholder="Search name, email, dept…" oninput="loadApps()">
         <button class="btn-refresh" onclick="loadApps()">&#8635;</button>
+        <button class="btn-export" onclick="exportHRCSV()">📊 Export CSV</button>
       </div>
     </div>
     <div id="table-wrap" style="overflow-x:auto;"></div>
@@ -116,16 +125,33 @@
     <div class="modal-foot"><button id="modal-cancel">Close</button></div>
   </div>
 </div>
+<div class="toast" id="toast"></div>
 
 <script>
   var token = sessionStorage.getItem('psg_token');
   var role  = sessionStorage.getItem('psg_role');
   if (!token || role !== 'hr') { window.location.href = 'login.html'; }
 
-  document.getElementById('user-info').textContent = sessionStorage.getItem('psg_email');
+  var email = sessionStorage.getItem('psg_email') || '';
+  var fullName = sessionStorage.getItem('psg_full_name');
+  var userDisplay = fullName ? (fullName + ' (' + email + ')') : email;
+  document.getElementById('user-info').textContent = userDisplay || email || 'HR Office';
   document.getElementById('btn-logout').addEventListener('click', function() { sessionStorage.clear(); window.location.href = 'login.html'; });
 
   function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function toast(msg, type) { var t = document.getElementById('toast'); t.textContent = msg; t.className = 'toast show toast-' + (type||'info'); setTimeout(function(){ t.className = 'toast'; }, 3000); }
+
+  function showStartupError(errMsg) {
+    var wrap = document.getElementById('table-wrap');
+    if (wrap) {
+      wrap.innerHTML = '<div style="background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:2rem; border-radius:.75rem; text-align:center;">' +
+        '<i class="fa-solid fa-triangle-exclamation" style="font-size:2.5rem; margin-bottom:1rem; color:#dc2626;"></i>' +
+        '<h3 style="font-size:1.1rem; font-weight:700; margin-bottom:.5rem;">Failed to Load HR Portal Data</h3>' +
+        '<p style="font-size:.875rem; margin-bottom:1rem;">' + esc(errMsg) + '</p>' +
+        '<button onclick="loadApps()" style="background:#dc2626; color:#fff; border:none; padding:.5rem 1.25rem; border-radius:.5rem; font-size:.875rem; cursor:pointer; font-weight:600;">Retry</button>' +
+        '</div>';
+    }
+  }
 
   async function api(path, opts) {
     opts = opts || {};
@@ -139,26 +165,36 @@
   async function loadApps() {
     var wrap = document.getElementById('table-wrap');
     var q = document.getElementById('search-input').value;
-    var url = '/api/applications?';
+    var url = '/api/hr/applications?';
     if (q) url += 'q=' + encodeURIComponent(q) + '&';
 
     try {
       var res = await api(url);
       var data = await res.json();
+      if (!res.ok) {
+        showStartupError(data.error || 'Failed to load HR candidate list');
+        return;
+      }
       var apps = data.applications || [];
 
       document.getElementById('s-total').textContent = apps.length;
       document.getElementById('count-label').textContent = '(' + apps.length + ')';
 
       if (!apps.length) {
-        wrap.innerHTML = '<div class="empty-state"><i class="fa-solid fa-inbox"></i>No shortlisted candidates yet.</div>';
+        wrap.innerHTML = '<div class="empty-state"><i class="fa-solid fa-inbox"></i>No shortlisted forwarded candidates available yet.</div>';
         return;
       }
 
-      var html = '<table><thead><tr><th>#</th><th>Name</th><th>Position</th><th>Department</th><th>Email</th><th>Mobile</th><th>Date</th><th>Actions</th></tr></thead><tbody>';
+      var html = '<table><thead><tr><th>#</th><th>App Ref</th><th>Name</th><th>Position</th><th>Department</th><th>Email</th><th>Mobile</th><th>Actions</th></tr></thead><tbody>';
       apps.forEach(function(a, i) {
-        var date = a.submitted_at ? new Date(a.submitted_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—';
-        html += '<tr><td>' + (i+1) + '</td><td style="font-weight:600;">' + esc(a.name||'—') + '</td><td>' + esc(a.position||'—') + '</td><td>' + esc(a.department||'—') + '</td><td>' + esc(a.email||'—') + '</td><td>' + esc(a.mobile_no||'—') + '</td><td>' + date + '</td><td><button class="btn-view" onclick="viewApp(' + a.id + ')">View</button></td></tr>';
+        html += '<tr><td>' + (i+1) + '</td>';
+        html += '<td style="font-weight:600;">' + esc(a.app_uuid||'—') + '</td>';
+        html += '<td style="font-weight:600;">' + esc(a.name||'—') + '</td>';
+        html += '<td>' + esc(a.position||'—') + '</td>';
+        html += '<td>' + esc(a.department||'—') + '</td>';
+        html += '<td>' + esc(a.email||'—') + '</td>';
+        html += '<td>' + esc(a.mobile_no||'—') + '</td>';
+        html += '<td><button class="btn-view" onclick="viewApp(' + a.id + ')">View</button></td></tr>';
       });
       html += '</tbody></table>';
       wrap.innerHTML = html;
@@ -168,15 +204,17 @@
   async function viewApp(id) {
     try {
       var res = await api('/api/applications/' + id);
-      if (!res.ok) return;
+      if (!res.ok) { toast('Failed to load candidate details', 'error'); return; }
       var app = await res.json();
       document.getElementById('modal-title').textContent = (app.name||'Candidate') + ' — ' + (app.position||'');
+      
       var fields = {
-        'Info': ['position','department','app_uuid','name','email','mobile_no'],
-        'Academic': ['achivements','net','set_slet'],
-        'Research': ['sci','scopus','ugc','h_index_google','h_index_scopus'],
-        'Status': ['hod_status','vp_status']
+        'Application Info': ['app_uuid','position','department','submitted_at'],
+        'Personal Details': ['name','dob','gender','email','mobile_no','father_name','category','community','native_city','native_state'],
+        'Academic Summary': ['achivements','net','set_slet'],
+        'Research Summary': ['sci','scopus','ugc','h_index_google','h_index_scopus']
       };
+      
       var html = '';
       for (var sec in fields) {
         html += '<div class="dsec-title">' + sec + '</div><div class="dfgrid">';
@@ -189,7 +227,18 @@
       if (app.resume_path) html += '<div class="dsec-title">Files</div><a href="' + app.resume_path + '" target="_blank" class="file-link">📄 View Resume</a>';
       document.getElementById('modal-body').innerHTML = html;
       document.getElementById('detail-overlay').classList.add('active');
-    } catch(e) {}
+    } catch(e) { toast('Error loading candidate', 'error'); }
+  }
+
+  async function exportHRCSV() {
+    try {
+      var res = await fetch('/api/hr/shortlisted-csv', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (!res.ok) { toast('No HR shortlisted data to export', 'info'); return; }
+      var blob = await res.blob();
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a'); a.href = url; a.download = 'HR_Shortlisted_Candidates.csv'; a.click();
+      URL.revokeObjectURL(url);
+    } catch(e) { toast('CSV Export failed: ' + e, 'error'); }
   }
 
   ['modal-close','modal-cancel'].forEach(function(id) {

@@ -194,11 +194,26 @@
   var role  = sessionStorage.getItem('psg_role');
   if (!token || role !== 'hod') { window.location.href = 'login.html'; }
 
-  document.getElementById('user-info').textContent = sessionStorage.getItem('psg_email');
+  var email = sessionStorage.getItem('psg_email') || '';
+  var fullName = sessionStorage.getItem('psg_full_name');
+  var dept = sessionStorage.getItem('psg_department');
+  var userDisplay = (fullName ? fullName : email) + (dept ? ' (' + dept + ')' : '');
+  document.getElementById('user-info').textContent = userDisplay || email || 'HOD User';
   document.getElementById('btn-logout').addEventListener('click', function() { sessionStorage.clear(); window.location.href = 'login.html'; });
 
   function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function toast(msg, type) { var t = document.getElementById('toast'); t.textContent = msg; t.className = 'toast show toast-' + (type||'info'); setTimeout(function(){ t.className = 'toast'; }, 3500); }
+
+  function showStartupError(errMsg) {
+    var banner = document.getElementById('status-banner');
+    if (banner) {
+      banner.innerHTML = '<div class="banner" style="background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:1.25rem; border-radius:.75rem;">' +
+        '<div style="font-weight:700; font-size:1rem; margin-bottom:.375rem;"><i class="fa-solid fa-triangle-exclamation"></i> Startup Request Failed</div>' +
+        '<div style="font-size:.875rem;">' + esc(errMsg) + '</div>' +
+        '<button onclick="loadDashboard()" style="margin-top:.75rem; background:#dc2626; color:#fff; border:none; padding:.375rem .875rem; border-radius:.375rem; font-size:.8125rem; cursor:pointer; font-weight:600;">Retry</button>' +
+        '</div>';
+    }
+  }
 
   async function api(path, opts) {
     opts = opts || {};
@@ -216,7 +231,7 @@
       var res = await api('/api/hod/applications');
       var data = await res.json();
       if (!res.ok) {
-        toast(data.error || 'Failed to load dashboard', 'error');
+        showStartupError(data.error || 'Failed to load dashboard');
         return;
       }
       currentHodData = data;
@@ -371,7 +386,6 @@
     } catch(e) {
       toast('Error downloading report', 'error');
     }
-  }ap.innerHTML = html;
   }
 
   async function markEligible(id) {

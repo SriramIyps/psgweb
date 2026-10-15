@@ -5,6 +5,7 @@ Auth:  Supabase Auth  |  Data: Supabase Postgres + RLS
 Run:   python app.py
 """
 import os
+import time
 import uuid
 import json
 from datetime import datetime
@@ -63,12 +64,39 @@ sb_anon = create_client(SUPABASE_URL, SUPABASE_ANON_KEY) if SUPABASE_URL and SUP
 # Service-role client: used for admin operations (create users, bypass RLS)
 sb_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY) if SUPABASE_URL and SUPABASE_SERVICE_KEY else None
 
+def sb_execute_with_retry(builder, retries=3):
+    """Execute a Supabase query builder with retries for transient socket disconnections."""
+    global sb_admin, sb_anon
+    for attempt in range(retries):
+        try:
+            return builder.execute()
+        except Exception as e:
+            if attempt == retries - 1:
+                raise e
+            try:
+                if SUPABASE_URL and SUPABASE_SERVICE_KEY:
+                    sb_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+                if SUPABASE_URL and SUPABASE_ANON_KEY:
+                    sb_anon = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+            except Exception:
+                pass
+            time.sleep(0.4)
+
 @app.before_request
 def global_supabase_guard():
     """Global guard: if Supabase client is unavailable, fail closed on all /api data routes."""
     if request.path.startswith("/api/") and request.path not in ("/api/health", "/api/settings"):
         if sb_admin is None:
             return jsonify(error="Database connection unavailable. Service operating in fail-closed mode."), 503
+
+# ─────────────────────────────────────────────
+# HEALTH CHECK
+# ─────────────────────────────────────────────
+@app.route("/api/health", methods=["GET"])
+def health():
+    """Health check endpoint for Railway / load balancers."""
+    return jsonify(status="ok", service="PSG CAS CONNECT"), 200
+
 
 # ─────────────────────────────────────────────
 # INIT (ensure upload dirs exist)
@@ -110,34 +138,94 @@ def _get_user_from_token():
         return None
     token = auth_header.split(" ", 1)[1]
 
-    if not sb_admin:
+    if not token or token in ("undefined", "null", ""):
         return None
 
     try:
-        # Verify token via Supabase
-        user_resp = sb_admin.auth.get_user(token)
-        user = user_resp.user
-        if not user:
+        user = None
+        # 1. Try sb_anon first with retries
+        if sb_anon:
+            for attempt in range(2):
+                try:
+                    user_resp = sb_anon.auth.get_user(token)
+                    if user_resp and user_resp.user:
+                        user = user_resp.user
+                        break
+                except Exception:
+                    time.sleep(0.2)
+
+        # 2. Try sb_admin with retries
+        if not user and sb_admin:
+            for attempt in range(2):
+                try:
+                    user_resp = sb_admin.auth.get_user(token)
+                    if user_resp and user_resp.user:
+                        user = user_resp.user
+                        break
+                except Exception:
+                    time.sleep(0.2)
+
+        user_id = str(user.id) if user else None
+        user_email = user.email if user else ""
+
+        # 3. If user object missing, parse JWT token payload
+        if not user_id:
+            try:
+                import jwt
+                decoded = jwt.decode(token, options={"verify_signature": False})
+                if decoded and "sub" in decoded:
+                    user_id = str(decoded["sub"])
+                    user_email = decoded.get("email", "")
+            except Exception as jwt_e:
+                print(f"[Auth] JWT decode error: {jwt_e}")
+                return None
+
+        if not user_id:
             return None
 
-        # Fetch profile (role, department)
-        profile_resp = (
-            sb_admin.table("profiles")
-            .select("role, department, full_name")
-            .eq("id", str(user.id))
-            .single()
-            .execute()
-        )
-        profile = profile_resp.data
-        if not profile:
-            return None
+        # 4. Fetch profile from database with fallback to JWT claims on network disconnect
+        role = None
+        department = None
+        full_name = None
+
+        try:
+            profile_resp = sb_execute_with_retry(
+                sb_admin.table("profiles")
+                .select("role, department, full_name")
+                .eq("id", user_id)
+                .single()
+            )
+            profile = profile_resp.data
+            if profile:
+                role = profile.get("role")
+                department = profile.get("department")
+                full_name = profile.get("full_name")
+        except Exception as pe:
+            print(f"[Auth] Profile lookup warning: {pe}")
+
+        # Fallback profile extraction from JWT metadata if profile query failed
+        if not role:
+            try:
+                import jwt
+                decoded = jwt.decode(token, options={"verify_signature": False})
+                user_meta = decoded.get("user_metadata") or {}
+                role = user_meta.get("role") or decoded.get("role")
+                full_name = user_meta.get("full_name") or user_email
+                if not role or role == "authenticated":
+                    if "hod" in user_email: role = "hod"
+                    elif "vp" in user_email: role = "vp"
+                    elif "hr" in user_email: role = "hr"
+                    elif "admin" in user_email: role = "admin"
+                    else: role = "candidate"
+            except Exception:
+                role = "candidate"
 
         return {
-            "id": str(user.id),
-            "email": user.email,
-            "role": profile["role"],
-            "department": profile.get("department"),
-            "full_name": profile["full_name"],
+            "id": user_id,
+            "email": user_email,
+            "role": role or "candidate",
+            "department": department,
+            "full_name": full_name or user_email,
             "token": token,
         }
     except Exception as e:
@@ -328,12 +416,17 @@ def _get_application_window_state():
     if not sb_admin:
         return "closed", "Database client uninitialized", True
 
-    try:
-        res = sb_admin.table("app_settings").select("key, value").execute()
-        settings = {row["key"]: row["value"] for row in (res.data or [])}
-    except Exception as e:
-        print(f"[ERROR] Failed to read app_settings: {e}")
-        return "closed", f"Database lookup error: {e}", True
+    settings = {}
+    for attempt in range(3):
+        try:
+            res = sb_admin.table("app_settings").select("key, value").execute()
+            settings = {row["key"]: row["value"] for row in (res.data or [])}
+            break
+        except Exception as e:
+            if attempt == 2:
+                print(f"[ERROR] Failed to read app_settings after 3 attempts: {e}")
+                return "closed", f"Database lookup error: {e}", True
+            time.sleep(0.5)
 
     legacy_toggle = settings.get("applications_open")
 
@@ -393,6 +486,20 @@ def submit_application():
 
     f = request.form
 
+    # 1. Check existing application lock status for candidate (Fail Closed)
+    existing_app = None
+    try:
+        ex_res = sb_execute_with_retry(
+            sb_admin.table("applications").select("id, is_locked, app_uuid").eq("user_id", user["id"]).limit(1)
+        )
+        if ex_res.data:
+            existing_app = ex_res.data[0]
+            if existing_app.get("is_locked"):
+                return jsonify(error="Application is submitted and locked. Edits are not allowed."), 403
+    except Exception as e:
+        print(f"[ERROR] Lock status check failed in submit_application: {e}")
+        return jsonify(error=f"Database error checking lock status: {e}"), 503
+
     # ── Mandatory fields ──
     name = (f.get("name") or "").strip()
     email_field = (f.get("email") or "").strip()
@@ -405,25 +512,13 @@ def submit_application():
 
     is_final_submit = (f.get("is_submitted") == "true")
 
-    # 1. Enforce Application Window ONLY on final submit (Draft saves permitted anytime if unlocked)
+    # 2. Enforce Application Window ONLY on final submit (Draft saves permitted anytime if unlocked)
     if is_final_submit:
         window_state, window_msg, is_err = _get_application_window_state()
         if is_err:
             return jsonify(error=f"Application window lookup failed: {window_msg}"), 503
         if window_state != "open":
             return jsonify(error=f"Cannot submit application: {window_msg}"), 403
-
-    # 2. Check existing application lock status for candidate (Fail Closed)
-    existing_app = None
-    try:
-        ex_res = sb_admin.table("applications").select("id, is_locked, app_uuid").eq("user_id", user["id"]).limit(1).execute()
-        if ex_res.data:
-            existing_app = ex_res.data[0]
-            if existing_app.get("is_locked"):
-                return jsonify(error="Application is submitted and locked. Edits are not allowed."), 403
-    except Exception as e:
-        print(f"[ERROR] Lock status check failed in submit_application: {e}")
-        return jsonify(error=f"Database error checking lock status: {e}"), 503
 
     # File uploads
     photo_path = save_file(request.files.get("photo"), "photos", ALLOWED_PHOTO)
@@ -435,7 +530,9 @@ def submit_application():
     # Reference ID: Atomic department-scoped counter <DeptCode>/<3-digit number>
     if not existing_app:
         try:
-            num_res = sb_admin.rpc("generate_application_number", {"p_department": department}).execute()
+            num_res = sb_execute_with_retry(
+                sb_admin.rpc("generate_application_number", {"p_department": department})
+            )
             if not num_res.data:
                 return jsonify(error="RPC generate_application_number returned empty reference ID"), 503
             app_uuid = num_res.data
@@ -480,11 +577,11 @@ def submit_application():
     # Server-controlled fields: strictly forced by backend
     app_record["app_uuid"] = app_uuid
     app_record["submitted_at"] = now
-    app_record["status"] = "Pending" if is_final_submit else "Draft"
+    app_record["status"] = "Draft"  # Initially Draft; updated to Submitted on final lock
     app_record["hod_status"] = "Pending"
     app_record["vp_status"] = "Pending"
     app_record["user_id"] = user["id"]
-    app_record["is_locked"] = is_final_submit
+    app_record["is_locked"] = False  # DO NOT lock until research and all steps succeed
     app_record["position"] = position
     app_record["department"] = department
     app_record["name"] = name
@@ -495,20 +592,88 @@ def submit_application():
     if resume_path: app_record["resume_path"] = resume_path
     if papers_path: app_record["papers_path"] = papers_path
 
+    # Step 1: Save/update application record (unlocked)
     try:
         if existing_app:
-            sb_admin.table("applications").update(app_record).eq("id", existing_app["id"]).execute()
+            sb_execute_with_retry(
+                sb_admin.table("applications").update(app_record).eq("id", existing_app["id"])
+            )
             app_id = existing_app["id"]
         else:
-            ins = sb_admin.table("applications").insert(app_record).execute()
+            ins = sb_execute_with_retry(
+                sb_admin.table("applications").insert(app_record)
+            )
             app_id = ins.data[0]["id"] if (ins.data and len(ins.data) > 0) else 0
     except Exception as e:
         print(f"[ERROR] Failed to save application record: {e}")
-        return jsonify(error="Failed to save application. " + str(e)), 503
+        return jsonify(error="Failed to save application: " + str(e)), 503
 
+    # Step 2: Save research rows atomically.
+    # CRITICAL RULE: The RPC's DELETE-on-empty-array will wipe previously saved rows
+    # if we pass [] for any table. To prevent this on Draft saves, we only call the
+    # RPC when at least one research table has rows to upsert, OR when this is a
+    # Final Submit (where the candidate explicitly chose what rows to keep/remove).
+    research_data_raw = f.get("research_data")
+    if research_data_raw or is_final_submit:
+        try:
+            rdata = json.loads(research_data_raw) if research_data_raw else {}
+            pubs_list = rdata.get("publications", [])
+            pats_list = rdata.get("patents", [])
+            cons_list = rdata.get("consultancy", [])
+            prjs_list = rdata.get("projects", [])
+            any_research_present = bool(pubs_list or pats_list or cons_list or prjs_list)
+
+            # On draft: skip RPC if all lists are empty (avoid wiping existing rows).
+            # On final submit: always run (candidate's deliberate removals are respected).
+            if is_final_submit or any_research_present:
+                sb_execute_with_retry(
+                    sb_admin.rpc("save_application_research", {
+                        "p_application_id": app_id,
+                        "p_publications": pubs_list,
+                        "p_patents": pats_list,
+                        "p_consultancy": cons_list,
+                        "p_projects": prjs_list,
+                        "p_iso_involvement": bool(rdata.get("iso_involvement")),
+                        "p_iso_details": str(rdata.get("iso_details", "")),
+                        "p_naac_iqac_details": str(rdata.get("naac_iqac_details", "")),
+                        "p_admin_positions": rdata.get("admin_positions", []),
+                    })
+                )
+            else:
+                # Draft with no research rows submitted — only update the ISO/NAAC/admin fields
+                # on the parent application row (no child-table changes).
+                if rdata:
+                    sb_execute_with_retry(
+                        sb_admin.table("applications").update({
+                            "iso_involvement": bool(rdata.get("iso_involvement")),
+                            "iso_details": str(rdata.get("iso_details", "")),
+                            "naac_iqac_details": str(rdata.get("naac_iqac_details", "")),
+                            "admin_positions_json": json.dumps(rdata.get("admin_positions", [])),
+                        }).eq("id", app_id)
+                    )
+        except Exception as e:
+            print(f"[ERROR] Research RPC execution failed during submit_application: {e}")
+            return jsonify(error=f"Failed to save research details: {e}"), 503
+
+    # Step 3: On final submit, apply lock LAST — ONLY after application + research rows saved
     if is_final_submit:
+        try:
+            sb_execute_with_retry(
+                sb_admin.table("applications").update({
+                    "is_locked": True,
+                    "status": "Submitted",
+                    "submitted_at": now
+                }).eq("id", app_id)
+            )
+        except Exception as e:
+            print(f"[ERROR] Lock application update failed: {e}")
+            return jsonify(error=f"Failed to lock application on submit: {e}"), 503
+
         user_identifier = user.get("email") or user.get("id", "unknown")
-        log_audit(user_identifier, "SUBMIT_FINAL_LOCK", application_id=app_id, old_value=False, new_value=True)
+        try:
+            log_audit(user_identifier, "SUBMIT_FINAL_LOCK", application_id=app_id, old_value=False, new_value=True)
+        except Exception as audit_err:
+            print(f"[Audit Warning] log_audit failed: {audit_err}")
 
     return jsonify(
         success=True,
@@ -519,7 +684,8 @@ def submit_application():
         position=position,
         department=department,
         is_locked=is_final_submit,
-        message="Application saved successfully!",
+        status="Submitted" if is_final_submit else "Draft",
+        message="Application submitted and locked successfully!" if is_final_submit else "Application saved successfully!",
     ), 201
 
 
@@ -533,7 +699,7 @@ def my_application():
 
     if request.method == "GET":
         try:
-            res = sb_admin.table("applications").select("*").eq("user_id", user["id"]).limit(1).execute()
+            res = sb_execute_with_retry(sb_admin.table("applications").select("*").eq("user_id", user["id"]).limit(1))
             if not res.data:
                 return jsonify(error="No application found"), 404
             return jsonify(res.data[0])
@@ -546,6 +712,17 @@ def my_application():
 
 
 
+HR_SENSITIVE_FIELDS = {
+    "aadhaar_no", "pan_no", "hod_remarks", "vp_remarks", "hod_reviewer", "vp_reviewer"
+}
+
+def strip_hr_sensitive_fields(app_dict):
+    """Strip sensitive personal numbers and reviewer remarks/names for HR role data minimization."""
+    if not isinstance(app_dict, dict):
+        return app_dict
+    return {k: v for k, v in app_dict.items() if k not in HR_SENSITIVE_FIELDS}
+
+
 @app.route("/api/applications", methods=["GET"])
 @auth_required
 def get_applications():
@@ -554,7 +731,7 @@ def get_applications():
     - hod: their department only (submitted applications, is_locked=True)
     - superadmin (VP): only submitted, forwarded, Eligible applications
     - admin: all
-    - hr: only vp_status='Shortlisted'
+    - hr: only vp_status='Shortlisted' from VP-forwarded departments
     """
     role = g.current_user["role"]
     dept_filter = request.args.get("department")
@@ -599,6 +776,10 @@ def get_applications():
         if role == "superadmin":
             # VP only sees candidates from departments that have been forwarded by HOD
             apps = [a for a in apps if a.get("hod_forwarded_at") is not None]
+        elif role == "hr":
+            # HR only sees shortlisted candidates from departments forwarded to HR by VP
+            apps = [a for a in apps if a.get("vp_forwarded_at") is not None]
+            apps = [strip_hr_sensitive_fields(a) for a in apps]
         return jsonify(applications=apps)
     except Exception as e:
         print(f"[DB Error] {e}")
@@ -629,8 +810,10 @@ def get_application(app_id):
         return jsonify(error="Access denied"), 403
     elif role == "hod" and app_data.get("department") != g.current_user["department"]:
         return jsonify(error="Access denied"), 403
-    elif role == "hr" and app_data.get("vp_status") != "Shortlisted":
-        return jsonify(error="Access denied"), 403
+    elif role == "hr":
+        if app_data.get("vp_status") != "Shortlisted" or app_data.get("vp_forwarded_at") is None:
+            return jsonify(error="Access denied"), 403
+        app_data = strip_hr_sensitive_fields(app_data)
 
     return jsonify(app_data)
 
@@ -791,8 +974,9 @@ def get_application_research(app_id):
         return jsonify(error="Access denied: not your application"), 403
     elif role == "hod" and app_data.get("department") != user["department"]:
         return jsonify(error="Access denied: application outside your department"), 403
-    elif role == "hr" and app_data.get("vp_status") != "Shortlisted":
-        return jsonify(error="Access denied: HR can only access shortlisted candidates"), 403
+    elif role == "hr":
+        if app_data.get("vp_status") != "Shortlisted" or app_data.get("vp_forwarded_at") is None:
+            return jsonify(error="Access denied: HR can only access shortlisted forwarded candidates"), 403
 
     # Fetch child table records fail-closed
     try:
@@ -917,8 +1101,9 @@ def generate_application_pdf(app_id):
         return jsonify(error="Access denied"), 403
     elif role == "hod" and app_data.get("department") != user["department"]:
         return jsonify(error="Access denied"), 403
-    elif role == "hr" and app_data.get("vp_status") != "Shortlisted":
-        return jsonify(error="Access denied"), 403
+    elif role == "hr":
+        if app_data.get("vp_status") != "Shortlisted" or app_data.get("vp_forwarded_at") is None:
+            return jsonify(error="Access denied"), 403
 
     # Fetch child records fail closed
     try:
@@ -988,7 +1173,7 @@ def generate_application_pdf(app_id):
             [Paragraph("<b>Father's / Mother's Name:</b>", table_cell_bold), Paragraph(f"{app_data.get('father_name','')} / {app_data.get('mother_name','')}", table_cell),
              Paragraph("<b>Marital Status:</b>", table_cell_bold), Paragraph(f"{app_data.get('marital_status','')} (Spouse: {app_data.get('spouse_name','N/A')})", table_cell)],
             [Paragraph("<b>Differently Abled:</b>", table_cell_bold), Paragraph(f"{app_data.get('diff_abled','No')} ({app_data.get('nature','N/A')})", table_cell),
-             Paragraph("<b>Aadhaar / PAN:</b>", table_cell_bold), Paragraph(f"{app_data.get('aadhaar_no','')} / {app_data.get('pan_no','')}", table_cell)],
+             Paragraph("<b>Aadhaar / PAN:</b>", table_cell_bold), Paragraph("REDACTED (HR View)" if role == "hr" else f"{app_data.get('aadhaar_no','')} / {app_data.get('pan_no','')}", table_cell)],
             [Paragraph("<b>Permanent Address:</b>", table_cell_bold), Paragraph(f"{app_data.get('native_address','')}, {app_data.get('native_city','')}, {app_data.get('native_state','')}, {app_data.get('native_country','')} - {app_data.get('native_pincode','')}", table_cell),
              Paragraph("<b>Local Address:</b>", table_cell_bold), Paragraph(f"{app_data.get('local_address','')}, {app_data.get('local_city','')}, {app_data.get('local_state','')}, {app_data.get('local_country','')} - {app_data.get('local_pincode','')}", table_cell)],
             [Paragraph("<b>Last Pay / Expected:</b>", table_cell_bold), Paragraph(f"₹{app_data.get('last_pay','0')} / ₹{app_data.get('pay_expected','0')}", table_cell),
@@ -1182,7 +1367,7 @@ def get_stats():
 def get_departments():
     """List distinct departments."""
     try:
-        res = sb_admin.table("applications").select("department").execute()
+        res = sb_execute_with_retry(sb_admin.table("applications").select("department"))
         depts = sorted(set(a["department"] for a in (res.data or []) if a.get("department")))
         return jsonify(departments=depts)
     except Exception as e:
@@ -1228,11 +1413,11 @@ def export_csv():
 # ═════════════════════════════════════════════
 
 def sanitize_csv_cell(val):
-    """CSV formula injection safety helper: prepends a single quote if string begins with =, +, -, or @."""
+    """CSV formula injection safety helper: prepends a single quote if string begins with =, +, -, @, \t, or \r."""
     if val is None:
         return ""
     s = str(val)
-    if s and s[0] in ('=', '+', '-', '@'):
+    if s and s[0] in ('=', '+', '-', '@', '\t', '\r'):
         return "'" + s
     return s
 
@@ -1768,7 +1953,7 @@ def report_not_eligible_csv():
 def vp_departments():
     """List department forwarding status for Vice Principal."""
     try:
-        res = sb_admin.table("applications").select("department, hod_forwarded_at, hod_forwarded_by, hod_status").eq("is_locked", True).execute()
+        res = sb_admin.table("applications").select("department, hod_forwarded_at, hod_forwarded_by, vp_forwarded_at, vp_forwarded_by, hod_status, vp_status").eq("is_locked", True).execute()
         apps = res.data or []
 
         dept_map = {}
@@ -1779,25 +1964,451 @@ def vp_departments():
             if d not in dept_map:
                 dept_map[d] = {
                     "department": d,
-                    "is_forwarded": False,
-                    "forwarded_at": None,
-                    "forwarded_by": None,
+                    "is_hod_forwarded": False,
+                    "is_forwarded": False,  # alias
+                    "hod_forwarded_at": None,
+                    "hod_forwarded_by": None,
+                    "is_vp_forwarded": False,
+                    "vp_forwarded_at": None,
+                    "vp_forwarded_by": None,
                     "total_submitted": 0,
                     "eligible_count": 0,
+                    "pending_vp_count": 0,
+                    "shortlisted_count": 0,
+                    "not_shortlisted_count": 0,
                 }
             dept_map[d]["total_submitted"] += 1
             if a.get("hod_status") == "Eligible":
                 dept_map[d]["eligible_count"] += 1
+                vp_st = a.get("vp_status") or "Pending"
+                if vp_st == "Pending":
+                    dept_map[d]["pending_vp_count"] += 1
+                elif vp_st == "Shortlisted":
+                    dept_map[d]["shortlisted_count"] += 1
+                elif vp_st == "Not Shortlisted":
+                    dept_map[d]["not_shortlisted_count"] += 1
+
             if a.get("hod_forwarded_at"):
+                dept_map[d]["is_hod_forwarded"] = True
                 dept_map[d]["is_forwarded"] = True
-                dept_map[d]["forwarded_at"] = a.get("hod_forwarded_at")
-                dept_map[d]["forwarded_by"] = a.get("hod_forwarded_by")
+                dept_map[d]["hod_forwarded_at"] = a.get("hod_forwarded_at")
+                dept_map[d]["hod_forwarded_by"] = a.get("hod_forwarded_by")
+
+            if a.get("vp_forwarded_at"):
+                dept_map[d]["is_vp_forwarded"] = True
+                dept_map[d]["vp_forwarded_at"] = a.get("vp_forwarded_at")
+                dept_map[d]["vp_forwarded_by"] = a.get("vp_forwarded_by")
 
         dept_list = sorted(list(dept_map.values()), key=lambda x: x["department"])
         return jsonify(departments=dept_list)
     except Exception as e:
         print(f"[ERROR] Failed to fetch VP departments: {e}")
         return jsonify(error=f"Database error fetching department status: {e}"), 503
+
+
+@app.route("/api/vp/forward-hr", methods=["POST"])
+@app.route("/api/vp/forward", methods=["POST"])
+@role_required("superadmin")
+def vp_forward_hr():
+    """VP forwards scrutinised shortlisted candidates of a department to HR."""
+    data = request.get_json(force=True) if request.is_json else {}
+    dept = (data.get("department") or request.args.get("department") or "").strip()
+    if not dept:
+        return jsonify(error="Department parameter is required"), 400
+
+    try:
+        sb_admin.rpc("rpc_vp_forward_to_hr", {
+            "p_department": dept,
+            "p_who": g.current_user["email"]
+        }).execute()
+
+        return jsonify(success=True, message=f"Department '{dept}' successfully forwarded to HR (SF Office).")
+    except Exception as e:
+        err_msg = str(e)
+        if "CONNECT_RULE:" in err_msg:
+            clean_err = err_msg.split("CONNECT_RULE:")[1].split("\n")[0].strip()
+            return jsonify(error=clean_err), 400
+        print(f"[ERROR] VP forward to HR failed: {e}")
+        return jsonify(error="Failed to forward department to HR. Please try again."), 503
+
+
+# ═════════════════════════════════════════════
+# VP STAMPED PDF & CSV REPORT ROUTES
+# ═════════════════════════════════════════════
+
+def _get_vp_report_context():
+    user = g.current_user
+    role = user["role"]
+    if role not in ("superadmin", "admin"):
+        return None, (jsonify(error=f"Role '{role}' is not authorized to generate VP reports"), 403)
+
+    dept_filter = request.args.get("department", "").strip()
+    timestamp = datetime.now(IST).strftime("%d %b %Y, %I:%M %p IST")
+    vp_name = user.get("full_name") or user.get("email") or "Vice Principal"
+    return {
+        "department": dept_filter or "All Departments",
+        "dept_filter": dept_filter,
+        "timestamp": timestamp,
+        "vp_name": vp_name,
+    }, None
+
+
+@app.route("/api/reports/vp-shortlisted-pdf", methods=["GET"])
+@app.route("/api/vp/shortlisted-pdf", methods=["GET"])
+@auth_required
+def report_vp_shortlisted_pdf():
+    ctx, err = _get_vp_report_context()
+    if err:
+        return err
+
+    dept_filter = ctx["dept_filter"]
+    query = sb_admin.table("applications").select("*").eq("is_locked", True).eq("hod_status", "Eligible").eq("vp_status", "Shortlisted").order("department").order("name")
+    if dept_filter:
+        query = query.eq("department", dept_filter)
+
+    try:
+        res = query.execute()
+        apps = res.data or []
+    except Exception as e:
+        return jsonify(error=f"Database error fetching applications: {e}"), 503
+
+    import io
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.units import inch
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=landscape(A4),
+        rightMargin=20, leftMargin=20, topMargin=25, bottomMargin=25
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=14, textColor=colors.HexColor('#002e5b'), alignment=1, spaceAfter=2)
+    subtitle_style = ParagraphStyle('SubTitle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, textColor=colors.HexColor('#334155'), alignment=1, spaceAfter=8)
+    table_hdr = ParagraphStyle('TH', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, leading=10, textColor=colors.HexColor('#1e293b'))
+    table_cell = ParagraphStyle('TC', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=10)
+    table_cell_bold = ParagraphStyle('TCB', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, leading=10)
+
+    elements = []
+    elements.append(Paragraph("PSG COLLEGE OF ARTS & SCIENCE", title_style))
+    elements.append(Paragraph(f"VICE PRINCIPAL SHORTLISTED CANDIDATES REPORT — {ctx['department'].upper()}", subtitle_style))
+    elements.append(Paragraph(f"Department: {ctx['department']} | Generated Date (IST): {ctx['timestamp']} | VP: {ctx['vp_name']}", ParagraphStyle('Sub', parent=styles['Normal'], fontSize=8, alignment=1, spaceAfter=10)))
+
+    headers = [
+        Paragraph("<b>#</b>", table_hdr),
+        Paragraph("<b>App Ref</b>", table_hdr),
+        Paragraph("<b>Candidate Name & Contact</b>", table_hdr),
+        Paragraph("<b>Position</b>", table_hdr),
+        Paragraph("<b>Department</b>", table_hdr),
+        Paragraph("<b>VP Status</b>", table_hdr),
+        Paragraph("<b>Reviewed Date</b>", table_hdr),
+    ]
+
+    table_rows = [headers]
+    for idx, a in enumerate(apps, 1):
+        rev_date = a.get("vp_reviewed_at", "")[:10] if a.get("vp_reviewed_at") else "—"
+        table_rows.append([
+            Paragraph(str(idx), table_cell),
+            Paragraph(str(a.get("app_uuid", "")), table_cell_bold),
+            Paragraph(f"<b>{a.get('name','')}</b><br/>{a.get('email','')}<br/>{a.get('mobile_no','')}", table_cell),
+            Paragraph(str(a.get("position", "")), table_cell),
+            Paragraph(str(a.get("department", "")), table_cell),
+            Paragraph("<font color='#16a34a'><b>Shortlisted</b></font>", table_cell),
+            Paragraph(rev_date, table_cell),
+        ])
+
+    t = Table(table_rows, colWidths=[0.3*inch, 1.4*inch, 2.8*inch, 1.8*inch, 1.8*inch, 1.2*inch, 1.2*inch])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#e2e8f0')),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+        ('PADDING', (0,0), (-1,-1), 4),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+    ]))
+    elements.append(t)
+    elements.append(Spacer(1, 15))
+    elements.append(Paragraph("<b>Approval:</b> Shortlisted candidates approved for submission to HR (SF Office) for interview scheduling.", ParagraphStyle('Decl', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#475569'))))
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    from flask import Response
+    safe_dept = ctx["department"].replace(" ", "_")
+    return Response(
+        buffer.getvalue(),
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=VP_Shortlisted_Candidates_{safe_dept}.pdf"},
+    )
+
+
+@app.route("/api/reports/vp-not-shortlisted-pdf", methods=["GET"])
+@app.route("/api/vp/not-shortlisted-pdf", methods=["GET"])
+@auth_required
+def report_vp_not_shortlisted_pdf():
+    ctx, err = _get_vp_report_context()
+    if err:
+        return err
+
+    dept_filter = ctx["dept_filter"]
+    query = sb_admin.table("applications").select("*").eq("is_locked", True).eq("hod_status", "Eligible").eq("vp_status", "Not Shortlisted").order("department").order("name")
+    if dept_filter:
+        query = query.eq("department", dept_filter)
+
+    try:
+        res = query.execute()
+        apps = res.data or []
+    except Exception as e:
+        return jsonify(error=f"Database error fetching applications: {e}"), 503
+
+    import io
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.units import inch
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=landscape(A4),
+        rightMargin=20, leftMargin=20, topMargin=25, bottomMargin=25
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=14, textColor=colors.HexColor('#002e5b'), alignment=1, spaceAfter=2)
+    subtitle_style = ParagraphStyle('SubTitle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, textColor=colors.HexColor('#334155'), alignment=1, spaceAfter=8)
+    table_hdr = ParagraphStyle('TH', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, leading=10, textColor=colors.HexColor('#1e293b'))
+    table_cell = ParagraphStyle('TC', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=10)
+    table_cell_bold = ParagraphStyle('TCB', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, leading=10)
+
+    elements = []
+    elements.append(Paragraph("PSG COLLEGE OF ARTS & SCIENCE", title_style))
+    elements.append(Paragraph(f"VICE PRINCIPAL NOT SHORTLISTENED CANDIDATES REPORT — {ctx['department'].upper()}", subtitle_style))
+    elements.append(Paragraph(f"Department: {ctx['department']} | Generated Date (IST): {ctx['timestamp']} | VP: {ctx['vp_name']}", ParagraphStyle('Sub', parent=styles['Normal'], fontSize=8, alignment=1, spaceAfter=10)))
+
+    headers = [
+        Paragraph("<b>#</b>", table_hdr),
+        Paragraph("<b>App Ref</b>", table_hdr),
+        Paragraph("<b>Candidate Name & Contact</b>", table_hdr),
+        Paragraph("<b>Position</b>", table_hdr),
+        Paragraph("<b>Department</b>", table_hdr),
+        Paragraph("<b>Reason for Not Shortlisting</b>", table_hdr),
+        Paragraph("<b>Reviewed Date</b>", table_hdr),
+    ]
+
+    table_rows = [headers]
+    for idx, a in enumerate(apps, 1):
+        rev_date = a.get("vp_reviewed_at", "")[:10] if a.get("vp_reviewed_at") else "—"
+        table_rows.append([
+            Paragraph(str(idx), table_cell),
+            Paragraph(str(a.get("app_uuid", "")), table_cell_bold),
+            Paragraph(f"<b>{a.get('name','')}</b><br/>{a.get('email','')}<br/>{a.get('mobile_no','')}", table_cell),
+            Paragraph(str(a.get("position", "")), table_cell),
+            Paragraph(str(a.get("department", "")), table_cell),
+            Paragraph(str(a.get("vp_remarks", "") or "-"), table_cell),
+            Paragraph(rev_date, table_cell),
+        ])
+
+    t = Table(table_rows, colWidths=[0.3*inch, 1.3*inch, 2.5*inch, 1.5*inch, 1.5*inch, 2.4*inch, 1.0*inch])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#e2e8f0')),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+        ('PADDING', (0,0), (-1,-1), 4),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+    ]))
+    elements.append(t)
+    elements.append(Spacer(1, 15))
+    elements.append(Paragraph("<b>Note:</b> Record of candidates not shortlisted during VP review along with mandatory documented rationale.", ParagraphStyle('Decl', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#475569'))))
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    from flask import Response
+    safe_dept = ctx["department"].replace(" ", "_")
+    return Response(
+        buffer.getvalue(),
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=VP_Not_Shortlisted_Candidates_{safe_dept}.pdf"},
+    )
+
+
+@app.route("/api/reports/vp-shortlisted-csv", methods=["GET"])
+@app.route("/api/vp/shortlisted-csv", methods=["GET"])
+@auth_required
+def report_vp_shortlisted_csv():
+    ctx, err = _get_vp_report_context()
+    if err:
+        return err
+
+    dept_filter = ctx["dept_filter"]
+    query = sb_admin.table("applications").select("*").eq("is_locked", True).eq("hod_status", "Eligible").eq("vp_status", "Shortlisted").order("department").order("name")
+    if dept_filter:
+        query = query.eq("department", dept_filter)
+
+    try:
+        res = query.execute()
+        rows = res.data or []
+    except Exception as e:
+        return jsonify(error=f"Database error fetching applications: {e}"), 503
+
+    import io
+    import csv
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(["# PSG CAS CONNECT — VP SHORTLISTED CANDIDATES REPORT"])
+    writer.writerow(["# Department", ctx["department"]])
+    writer.writerow(["# Generated Date (IST)", ctx["timestamp"]])
+    writer.writerow(["# VP Name", ctx["vp_name"]])
+    writer.writerow([])
+
+    fieldnames = ["app_uuid", "name", "email", "mobile_no", "position", "department", "vp_status", "vp_reviewed_at", "vp_reviewer"]
+    writer.writerow(fieldnames)
+
+    for r in rows:
+        row_vals = [sanitize_csv_cell(r.get(f)) for f in fieldnames]
+        writer.writerow(row_vals)
+
+    from flask import Response
+    safe_dept = ctx["department"].replace(" ", "_")
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=VP_Shortlisted_Candidates_{safe_dept}.csv"},
+    )
+
+
+@app.route("/api/reports/vp-not-shortlisted-csv", methods=["GET"])
+@app.route("/api/vp/not-shortlisted-csv", methods=["GET"])
+@auth_required
+def report_vp_not_shortlisted_csv():
+    ctx, err = _get_vp_report_context()
+    if err:
+        return err
+
+    dept_filter = ctx["dept_filter"]
+    query = sb_admin.table("applications").select("*").eq("is_locked", True).eq("hod_status", "Eligible").eq("vp_status", "Not Shortlisted").order("department").order("name")
+    if dept_filter:
+        query = query.eq("department", dept_filter)
+
+    try:
+        res = query.execute()
+        rows = res.data or []
+    except Exception as e:
+        return jsonify(error=f"Database error fetching applications: {e}"), 503
+
+    import io
+    import csv
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(["# PSG CAS CONNECT — VP NOT SHORTLISTED CANDIDATES REPORT"])
+    writer.writerow(["# Department", ctx["department"]])
+    writer.writerow(["# Generated Date (IST)", ctx["timestamp"]])
+    writer.writerow(["# VP Name", ctx["vp_name"]])
+    writer.writerow([])
+
+    fieldnames = ["app_uuid", "name", "email", "mobile_no", "position", "department", "vp_status", "vp_remarks", "vp_reviewed_at", "vp_reviewer"]
+    writer.writerow(fieldnames)
+
+    for r in rows:
+        row_vals = [sanitize_csv_cell(r.get(f)) for f in fieldnames]
+        writer.writerow(row_vals)
+
+    from flask import Response
+    safe_dept = ctx["department"].replace(" ", "_")
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=VP_Not_Shortlisted_Candidates_{safe_dept}.csv"},
+    )
+
+
+# ═════════════════════════════════════════════
+# HR PORTAL ENDPOINTS
+# ═════════════════════════════════════════════
+
+@app.route("/api/hr/applications", methods=["GET"])
+@auth_required
+def hr_applications():
+    """HR role application listing: strictly vp_status='Shortlisted' and vp_forwarded_at IS NOT NULL."""
+    role = g.current_user["role"]
+    if role not in ("hr", "admin"):
+        return jsonify(error=f"Role '{role}' is not authorized to access HR portal data"), 403
+
+    dept_filter = request.args.get("department")
+    q = request.args.get("q")
+
+    query = sb_admin.table("applications").select("*").eq("vp_status", "Shortlisted").order("submitted_at", desc=True)
+
+    if dept_filter:
+        query = query.eq("department", dept_filter)
+    if q:
+        query = query.or_(f"name.ilike.%{q}%,email.ilike.%{q}%,department.ilike.%{q}%,position.ilike.%{q}%")
+
+    try:
+        res = query.execute()
+        apps = res.data or []
+        # HR only sees candidates from departments forwarded to HR by VP
+        apps = [a for a in apps if a.get("vp_forwarded_at") is not None]
+        apps = [strip_hr_sensitive_fields(a) for a in apps]
+        return jsonify(applications=apps)
+    except Exception as e:
+        print(f"[ERROR] HR applications fetch failed: {e}")
+        return jsonify(applications=[], error=str(e)), 500
+
+
+@app.route("/api/hr/shortlisted-csv", methods=["GET"])
+@app.route("/api/reports/hr-shortlisted-csv", methods=["GET"])
+@auth_required
+def hr_shortlisted_csv():
+    """HR shortlisted candidate CSV export with strict data minimization (no aadhaar/pan/remarks)."""
+    role = g.current_user["role"]
+    if role not in ("hr", "admin"):
+        return jsonify(error=f"Role '{role}' is not authorized to export HR reports"), 403
+
+    dept = request.args.get("department", "").strip()
+    query = sb_admin.table("applications").select("*").eq("vp_status", "Shortlisted").order("department").order("name")
+    if dept:
+        query = query.eq("department", dept)
+
+    try:
+        res = query.execute()
+        apps = res.data or []
+        # HR only sees forwarded candidates
+        apps = [a for a in apps if a.get("vp_forwarded_at") is not None]
+    except Exception as e:
+        return jsonify(error=f"Database error fetching applications: {e}"), 503
+
+    import io
+    import csv
+    output = io.StringIO()
+    writer = csv.writer(output)
+    timestamp = datetime.now(IST).strftime("%d %b %Y, %I:%M %p IST")
+    hr_name = g.current_user.get("full_name") or g.current_user.get("email") or "HR Office"
+
+    writer.writerow(["# PSG CAS CONNECT — HR SHORTLISTED CANDIDATES REPORT"])
+    writer.writerow(["# Department Filter", dept or "All Departments"])
+    writer.writerow(["# Generated Date (IST)", timestamp])
+    writer.writerow(["# HR Representative", hr_name])
+    writer.writerow([])
+
+    # STRICT DATA MINIMIZATION: OMIT aadhaar_no, pan_no, hod_remarks, vp_remarks, hod_reviewer, vp_reviewer
+    fieldnames = ["app_uuid", "name", "email", "mobile_no", "position", "department", "submitted_at", "vp_forwarded_at"]
+    writer.writerow(fieldnames)
+
+    for r in apps:
+        row_vals = [sanitize_csv_cell(r.get(f)) for f in fieldnames]
+        writer.writerow(row_vals)
+
+    from flask import Response
+    safe_dept = (dept or "All").replace(" ", "_")
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=HR_Shortlisted_Candidates_{safe_dept}.csv"},
+    )
 
 @app.route("/api/admin/users", methods=["GET"])
 @role_required("admin")

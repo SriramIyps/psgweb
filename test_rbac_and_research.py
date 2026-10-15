@@ -909,8 +909,162 @@ def run_tests():
     except Exception as e:
         print(f"[FAIL] Test 27: {e}")
 
+    # ── TEST 28: VP department forward to HR ──
+    try:
+        app_module._get_user_from_token = lambda: {
+            "id": "vp-123", "role": "superadmin", "department": None, "full_name": "Vice Principal", "email": "vp@psgcas.ac.in"
+        }
+        class MockAdminVPForward:
+            def rpc(self, name, params):
+                assert name == "rpc_vp_forward_to_hr"
+                assert params["p_department"] == "Computer Science"
+                return MockRPC()
+
+        app_module.sb_admin = MockAdminVPForward()
+        res = client.post('/api/vp/forward-hr',
+                          headers={"Authorization": "Bearer fake-jwt"},
+                          data=json.dumps({"department": "Computer Science"}),
+                          content_type='application/json')
+        assert res.status_code == 200, f"Expected 200, got {res.status_code}"
+        data = json.loads(res.data)
+        assert data["success"] is True
+        print("[PASS] Test 28: VP department forward to HR RPC executed successfully.")
+        passed += 1
+    except Exception as e:
+        print(f"[FAIL] Test 28: {e}")
+
+    # ── TEST 29: HR blocked (403) on non-shortlisted / unforwarded candidate ──
+    try:
+        app_module._get_user_from_token = lambda: {
+            "id": "hr-123", "role": "hr", "department": None, "full_name": "HR Manager", "email": "hr@psgcas.ac.in"
+        }
+        class MockAdminHRAccess:
+            def table(self, name):
+                # Candidate is Shortlisted by VP, BUT department has NOT been forwarded to HR yet (vp_forwarded_at is None)
+                return MockQuery([{"id": 201, "name": "Unforwarded Cand", "vp_status": "Shortlisted", "vp_forwarded_at": None}])
+
+        app_module.sb_admin = MockAdminHRAccess()
+        res = client.get('/api/applications/201', headers={"Authorization": "Bearer fake-jwt"})
+        assert res.status_code == 403, f"Expected 403 for HR accessing unforwarded candidate, got {res.status_code}"
+
+        res_res = client.get('/api/applications/201/research', headers={"Authorization": "Bearer fake-jwt"})
+        assert res_res.status_code == 403, f"Expected 403 for HR research access on unforwarded candidate, got {res_res.status_code}"
+
+        print("[PASS] Test 29: HR strictly blocked (403) from candidate details and research prior to VP forwarding.")
+        passed += 1
+    except Exception as e:
+        print(f"[FAIL] Test 29: {e}")
+
+    # ── TEST 30: HR application listing & data minimization ──
+    try:
+        app_module._get_user_from_token = lambda: {
+            "id": "hr-123", "role": "hr", "department": None, "full_name": "HR Manager", "email": "hr@psgcas.ac.in"
+        }
+        class MockAdminHRListing:
+            def table(self, name):
+                return MockQuery([
+                    {
+                        "id": 301, "name": "Shortlisted Forwarded Cand", "department": "Computer Science",
+                        "vp_status": "Shortlisted", "vp_forwarded_at": "2026-10-03T12:00:00Z",
+                        "aadhaar_no": "1234-5678-9012", "pan_no": "ABCDE1234F",
+                        "hod_remarks": "Secret HOD notes", "vp_remarks": "Secret VP notes",
+                        "hod_reviewer": "hod@psgcas.ac.in", "vp_reviewer": "vp@psgcas.ac.in"
+                    },
+                    {
+                        "id": 302, "name": "Unforwarded Shortlisted Cand", "department": "Mathematics",
+                        "vp_status": "Shortlisted", "vp_forwarded_at": None,
+                        "aadhaar_no": "9999-9999-9999", "pan_no": "XYZ9999Z"
+                    }
+                ])
+
+        app_module.sb_admin = MockAdminHRListing()
+        res = client.get('/api/hr/applications', headers={"Authorization": "Bearer fake-jwt"})
+        assert res.status_code == 200, f"Expected 200, got {res.status_code}"
+        data = json.loads(res.data)
+        apps = data["applications"]
+
+        # Only forwarded candidate must be returned
+        assert len(apps) == 1, f"Expected 1 forwarded application for HR, got {len(apps)}"
+        app_item = apps[0]
+        assert app_item["name"] == "Shortlisted Forwarded Cand"
+
+        # STRICT DATA MINIMIZATION: Sensitive fields must be completely stripped
+        sensitive = ["aadhaar_no", "pan_no", "hod_remarks", "vp_remarks", "hod_reviewer", "vp_reviewer"]
+        for field in sensitive:
+            assert field not in app_item, f"Data minimization violation! Field '{field}' present in HR response."
+
+        print("[PASS] Test 30: HR application listing correctly filters unforwarded candidates and enforces strict data minimization.")
+        passed += 1
+    except Exception as e:
+        print(f"[FAIL] Test 30: {e}")
+
+    # ── TEST 31: HR CSV export with data minimization ──
+    try:
+        app_module._get_user_from_token = lambda: {
+            "id": "hr-123", "role": "hr", "department": None, "full_name": "HR Officer", "email": "hr@psgcas.ac.in"
+        }
+        class MockAdminHRCSV:
+            def table(self, name):
+                return MockQuery([
+                    {
+                        "app_uuid": "CS/001", "name": "Safe Candidate", "email": "safe@test.com", "mobile_no": "9876543210",
+                        "position": "Assistant Professor", "department": "Computer Science",
+                        "vp_status": "Shortlisted", "vp_forwarded_at": "2026-10-03T12:00:00Z",
+                        "aadhaar_no": "SENSITIVE_AADHAAR", "pan_no": "SENSITIVE_PAN", "hod_remarks": "SENSITIVE_REMARKS"
+                    }
+                ])
+
+        app_module.sb_admin = MockAdminHRCSV()
+        res = client.get('/api/hr/shortlisted-csv', headers={"Authorization": "Bearer fake-jwt"})
+        assert res.status_code == 200, f"Expected 200, got {res.status_code}"
+        csv_text = res.data.decode('utf-8')
+
+        assert "PSG CAS CONNECT — HR SHORTLISTED CANDIDATES REPORT" in csv_text
+        assert "SENSITIVE_AADHAAR" not in csv_text, "HR CSV leaked Aadhaar number!"
+        assert "SENSITIVE_PAN" not in csv_text, "HR CSV leaked PAN number!"
+        assert "SENSITIVE_REMARKS" not in csv_text, "HR CSV leaked internal remarks!"
+
+        print("[PASS] Test 31: HR CSV export verified with strict data minimization.")
+        passed += 1
+    except Exception as e:
+        print(f"[FAIL] Test 31: {e}")
+
+    # ── TEST 32: VP Shortlisted & Not Shortlisted Stamped Reports ──
+    try:
+        app_module._get_user_from_token = lambda: {
+            "id": "vp-123", "role": "superadmin", "department": None, "full_name": "Dr. VP Name", "email": "vp@psgcas.ac.in"
+        }
+        class MockAdminVPReports:
+            def table(self, name):
+                return MockQuery([
+                    {
+                        "app_uuid": "CS/005", "name": "=Formula Inject Cand", "email": "cand5@test.com", "mobile_no": "9876543210",
+                        "position": "Associate Professor", "department": "Computer Science",
+                        "vp_status": "Not Shortlisted", "vp_remarks": "Did not meet experience criteria",
+                        "vp_reviewed_at": "2026-10-03T12:00:00Z", "vp_reviewer": "vp@psgcas.ac.in"
+                    }
+                ])
+
+        app_module.sb_admin = MockAdminVPReports()
+
+        res_csv = client.get('/api/reports/vp-not-shortlisted-csv?department=Computer Science', headers={"Authorization": "Bearer fake-jwt"})
+        assert res_csv.status_code == 200, f"Expected 200, got {res_csv.status_code}"
+        csv_out = res_csv.data.decode('utf-8')
+        assert "VP NOT SHORTLISTED CANDIDATES REPORT" in csv_out
+        assert "Did not meet experience criteria" in csv_out, "VP Not Shortlisted CSV missing mandatory remarks"
+        assert "'=Formula Inject Cand" in csv_out, "Formula injection not sanitized in VP CSV report"
+
+        res_pdf = client.get('/api/reports/vp-not-shortlisted-pdf?department=Computer Science', headers={"Authorization": "Bearer fake-jwt"})
+        assert res_pdf.status_code == 200, f"Expected 200 PDF response, got {res_pdf.status_code}"
+        assert res_pdf.mimetype == "application/pdf"
+
+        print("[PASS] Test 32: VP Not Shortlisted stamped PDF & CSV reports generated with mandatory remarks & formula protection.")
+        passed += 1
+    except Exception as e:
+        print(f"[FAIL] Test 32: {e}")
+
     print("=" * 75)
-    print(f"  RESULTS: {passed}/27 TESTS PASSED")
+    print(f"  RESULTS: {passed}/32 TESTS PASSED")
     print("=" * 75)
 
 if __name__ == "__main__":

@@ -28,6 +28,15 @@
     .stat-card { background: #fff; border-radius: .875rem; padding: 1.25rem 1rem; border: 1px solid #e2e8f0; }
     .stat-card .stat-val { font-size: 1.875rem; font-weight: 800; color: var(--maroon); }
     .stat-card .stat-label { font-size: .8125rem; color: #64748b; margin-top: .25rem; }
+    
+    .dept-action-bar { background: #fff; border-radius: .875rem; border: 1px solid #e2e8f0; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .dept-info { display: flex; align-items: center; gap: 1rem; }
+    .dept-title { font-size: 1.1rem; font-weight: 700; color: #1e293b; }
+    .dept-progress { font-size: .85rem; color: #475569; margin-top: .2rem; }
+    .btn-forward-hr { background: #2563eb; color: #fff; border: none; padding: .6rem 1.2rem; border-radius: .5rem; font-size: .875rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: .5rem; transition: background .15s; }
+    .btn-forward-hr:hover { background: #1d4ed8; }
+    .btn-forward-hr:disabled { background: #cbd5e1; color: #64748b; cursor: not-allowed; }
+    
     .table-card { background: #fff; border-radius: .875rem; border: 1px solid #e2e8f0; overflow: hidden; }
     .table-header { padding: 1rem 1.25rem; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; }
     .table-header h3 { font-size: 1rem; font-weight: 600; }
@@ -39,6 +48,10 @@
     .btn-refresh:hover { background: #e2e8f0; }
     .btn-export { padding: .4375rem 1rem; background: var(--maroon); color: #fff; border: none; border-radius: .5rem; font-size: .8125rem; font-weight: 500; cursor: pointer; }
     .btn-export:hover { background: var(--maroon-dark); }
+    .btn-report-group { display: flex; gap: .3rem; }
+    .btn-rep { padding: .4375rem .75rem; border-radius: .5rem; font-size: .75rem; font-weight: 600; border: 1px solid #cbd5e1; background: #fff; cursor: pointer; color: #334155; }
+    .btn-rep:hover { background: #f8fafc; border-color: #94a3b8; }
+    
     table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
     thead th { background: #f8fafc; padding: .625rem 1rem; text-align: left; font-weight: 600; color: #475569; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
     tbody tr { border-bottom: 1px solid #f1f5f9; transition: background .1s; }
@@ -100,8 +113,8 @@
 </div>
 
 <main class="main">
-  <p class="page-title">All Applications</p>
-  <p class="page-sub">Review eligible candidates and mark as Shortlisted or Not Shortlisted.</p>
+  <p class="page-title">Vice Principal Scrutiny & HR Forwarding</p>
+  <p class="page-sub">Review eligible candidates and forward shortlisted candidates to HR (SF Office).</p>
 
   <div class="stats-grid">
     <div class="stat-card"><div class="stat-val" id="s-total">–</div><div class="stat-label">Total Applications</div></div>
@@ -110,12 +123,26 @@
     <div class="stat-card"><div class="stat-val" id="s-today" style="color:#b45309;">–</div><div class="stat-label">Submitted Today</div></div>
   </div>
 
+  <div class="dept-action-bar" id="dept-action-bar" style="display:none;">
+    <div class="dept-info">
+      <div>
+        <div class="dept-title" id="dept-title-text">Department</div>
+        <div class="dept-progress" id="dept-progress-text">0 of 0 candidates reviewed</div>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:.75rem;">
+      <button class="btn-forward-hr" id="btn-forward-hr" onclick="forwardCurrentDeptToHR()">
+        <i class="fa-solid fa-paper-plane"></i> Forward to HR (SF Office)
+      </button>
+    </div>
+  </div>
+
   <div class="table-card">
     <div class="table-header">
       <h3>Applications <span id="count-label" style="color:#94a3b8;font-weight:400;font-size:.875rem;"></span></h3>
       <div class="ctrl-bar">
         <input type="text" id="search-input" placeholder="Search name, email, dept…" oninput="loadApps()">
-        <select id="filter-dept" onchange="loadApps()"><option value="">All Departments</option></select>
+        <select id="filter-dept" onchange="onDeptChange()"><option value="">All Departments</option></select>
         <select id="filter-hod" onchange="loadApps()">
           <option value="">All HOD Status</option>
           <option value="Eligible">Eligible</option>
@@ -129,7 +156,12 @@
           <option value="Not Shortlisted">Not Shortlisted</option>
         </select>
         <button class="btn-refresh" onclick="loadApps()">&#8635;</button>
-        <button class="btn-export" onclick="exportCSV()">&#8595; CSV</button>
+        <div class="btn-report-group">
+          <button class="btn-rep" onclick="downloadReport('shortlisted-pdf')" title="Download Shortlisted PDF">📄 Shortlisted PDF</button>
+          <button class="btn-rep" onclick="downloadReport('not-shortlisted-pdf')" title="Download Not Shortlisted PDF">📄 Rejected PDF</button>
+          <button class="btn-rep" onclick="downloadReport('shortlisted-csv')" title="Download Shortlisted CSV">📊 Shortlisted CSV</button>
+          <button class="btn-rep" onclick="downloadReport('not-shortlisted-csv')" title="Download Not Shortlisted CSV">📊 Rejected CSV</button>
+        </div>
       </div>
     </div>
     <div id="table-wrap" style="overflow-x:auto;"></div>
@@ -154,11 +186,26 @@
   var role  = sessionStorage.getItem('psg_role');
   if (!token || role !== 'superadmin') { window.location.href = 'login.html'; }
 
-  document.getElementById('user-info').textContent = sessionStorage.getItem('psg_email');
+  var email = sessionStorage.getItem('psg_email') || '';
+  var fullName = sessionStorage.getItem('psg_full_name');
+  var userDisplay = fullName ? (fullName + ' (' + email + ')') : email;
+  document.getElementById('user-info').textContent = userDisplay || email || 'Vice Principal';
   document.getElementById('btn-logout').addEventListener('click', function() { sessionStorage.clear(); window.location.href = 'login.html'; });
 
   function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function toast(msg, type) { var t = document.getElementById('toast'); t.textContent = msg; t.className = 'toast show toast-' + (type||'info'); setTimeout(function(){ t.className = 'toast'; }, 3000); }
+
+  function showStartupError(errMsg) {
+    var wrap = document.getElementById('table-wrap');
+    if (wrap) {
+      wrap.innerHTML = '<div style="background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:2rem; border-radius:.75rem; text-align:center;">' +
+        '<i class="fa-solid fa-triangle-exclamation" style="font-size:2.5rem; margin-bottom:1rem; color:#dc2626;"></i>' +
+        '<h3 style="font-size:1.1rem; font-weight:700; margin-bottom:.5rem;">Failed to Load Vice Principal Portal Data</h3>' +
+        '<p style="font-size:.875rem; margin-bottom:1rem;">' + esc(errMsg) + '</p>' +
+        '<button onclick="loadApps()" style="background:#dc2626; color:#fff; border:none; padding:.5rem 1.25rem; border-radius:.5rem; font-size:.875rem; cursor:pointer; font-weight:600;">Retry</button>' +
+        '</div>';
+    }
+  }
 
   async function api(path, opts) {
     opts = opts || {};
@@ -176,19 +223,105 @@
     try {
       var res = await api('/api/vp/departments');
       var data = await res.json();
+      if (!res.ok) { showStartupError(data.error || 'Failed to load department status'); return; }
       var sel = document.getElementById('filter-dept');
+      var currentVal = sel.value;
       sel.innerHTML = '<option value="">All Departments</option>';
       (data.departments || []).forEach(function(d) {
         deptForwardedMap[d.department] = d;
         var o = document.createElement('option');
         o.value = d.department;
-        var statusTag = d.is_forwarded ? ' [Forwarded]' : ' [Pending HOD Forward]';
+        var statusTag = '';
+        if (d.is_vp_forwarded) {
+          statusTag = ' [VP Forwarded to HR]';
+        } else if (d.is_hod_forwarded || d.is_forwarded) {
+          statusTag = ' [HOD Forwarded]';
+        } else {
+          statusTag = ' [Pending HOD Forward]';
+        }
         o.textContent = d.department + statusTag;
         sel.appendChild(o);
       });
-    } catch(e) {}
+      sel.value = currentVal;
+    } catch(e) {
+      showStartupError('Network error connecting to server: ' + e);
+    }
   }
-  loadDepartments();
+
+  function onDeptChange() {
+    updateDeptActionBar();
+    loadApps();
+  }
+
+  function updateDeptActionBar() {
+    var dept = document.getElementById('filter-dept').value;
+    var bar = document.getElementById('dept-action-bar');
+    if (!dept || !deptForwardedMap[dept]) {
+      bar.style.display = 'none';
+      return;
+    }
+    bar.style.display = 'flex';
+    var d = deptForwardedMap[dept];
+    document.getElementById('dept-title-text').textContent = 'Department of ' + d.department;
+
+    var totalEligible = d.eligible_count || 0;
+    var pendingVP = d.pending_vp_count || 0;
+    var reviewedVP = (d.shortlisted_count || 0) + (d.not_shortlisted_count || 0);
+
+    var progText = reviewedVP + ' of ' + totalEligible + ' eligible candidates reviewed';
+    if (d.is_vp_forwarded) {
+      progText += ' • <span style="color:#059669; font-weight:600;"><i class="fa-solid fa-circle-check"></i> Forwarded to HR (SF Office)</span>';
+    } else if (!d.is_hod_forwarded && !d.is_forwarded) {
+      progText += ' • <span style="color:#d97706; font-weight:600;"><i class="fa-solid fa-clock"></i> Pending HOD Forward</span>';
+    }
+    document.getElementById('dept-progress-text').innerHTML = progText;
+
+    var btn = document.getElementById('btn-forward-hr');
+    if (d.is_vp_forwarded) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-check-double"></i> Already Forwarded to HR';
+      btn.title = 'This department has already been forwarded to HR.';
+    } else if (!d.is_hod_forwarded && !d.is_forwarded) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Forward to HR (SF Office)';
+      btn.title = 'HOD must forward scrutinised candidates first.';
+    } else if (pendingVP > 0) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Forward to HR (SF Office)';
+      btn.title = pendingVP + ' candidate(s) still pending review at VP. Complete all reviews first.';
+    } else {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Forward to HR (SF Office)';
+      btn.title = 'Forward all scrutinised candidates of ' + d.department + ' to HR';
+    }
+  }
+
+  async function forwardCurrentDeptToHR() {
+    var dept = document.getElementById('filter-dept').value;
+    if (!dept) {
+      toast('Please select a specific department first', 'error');
+      return;
+    }
+    if (!confirm('Forward all scrutinised candidates of "' + dept + '" to HR (SF Office)? Once forwarded, candidate reviews for this department will be locked.')) return;
+
+    try {
+      var res = await api('/api/vp/forward-hr', {
+        method: 'POST',
+        body: JSON.stringify({ department: dept })
+      });
+      var data = await res.json();
+      if (res.ok) {
+        toast('Department "' + dept + '" successfully forwarded to HR!', 'success');
+        await loadDepartments();
+        updateDeptActionBar();
+        loadApps();
+      } else {
+        toast(data.error || 'Forwarding failed', 'error');
+      }
+    } catch(e) {
+      toast('Error: ' + e, 'error');
+    }
+  }
 
   async function loadApps() {
     var wrap = document.getElementById('table-wrap');
@@ -197,7 +330,7 @@
     var hod = document.getElementById('filter-hod').value;
     var vp = document.getElementById('filter-vp').value;
 
-    if (dept && deptForwardedMap[dept] && !deptForwardedMap[dept].is_forwarded) {
+    if (dept && deptForwardedMap[dept] && !deptForwardedMap[dept].is_hod_forwarded && !deptForwardedMap[dept].is_forwarded) {
       wrap.innerHTML = '<div class="empty-state"><i class="fa-solid fa-clock-rotate-left" style="color:#d97706; font-size: 2.5rem; margin-bottom: .75rem;"></i>' +
         '<h3 style="font-weight:700; color:#1e293b; margin-bottom:.5rem;">Department Scrutiny Pending Forwarding</h3>' +
         '<p style="max-width:520px; margin:0 auto; line-height:1.5;">The HOD for <strong>' + esc(dept) + '</strong> has not forwarded scrutinised candidates to the Vice Principal yet. Eligible candidates from this department will appear here once HOD forwarding is complete.</p></div>';
@@ -218,6 +351,10 @@
     try {
       var res = await api(url);
       var data = await res.json();
+      if (!res.ok) {
+        showStartupError(data.error || 'Failed to load VP candidates list');
+        return;
+      }
       var apps = data.applications || [];
 
       document.getElementById('count-label').textContent = '(' + apps.length + ')';
@@ -237,7 +374,9 @@
         var hodSc = {'Pending':'s-pending','Eligible':'s-eligible','Not Eligible':'s-not-eligible'}[a.hod_status] || 's-pending';
         var vpSc = {'Pending':'s-pending','Shortlisted':'s-shortlisted','Not Shortlisted':'s-not-shortlisted'}[a.vp_status] || 's-pending';
         var date = a.submitted_at ? new Date(a.submitted_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—';
-        var canShortlist = a.hod_status === 'Eligible' && a.vp_status === 'Pending';
+        
+        var isDeptVpForwarded = a.vp_forwarded_at !== null && a.vp_forwarded_at !== undefined;
+        var canShortlist = a.hod_status === 'Eligible' && a.vp_status === 'Pending' && !isDeptVpForwarded;
 
         html += '<tr><td>' + (i+1) + '</td>';
         html += '<td style="font-weight:600;">' + esc(a.name||'—') + '</td>';
@@ -252,6 +391,8 @@
         if (canShortlist) {
           html += '<button class="btn-shortlist" onclick="vpReview(' + a.id + ',\'Shortlisted\')">✓ Shortlist</button>';
           html += '<button class="btn-reject" onclick="vpReview(' + a.id + ',\'Not Shortlisted\')">✗ Reject</button>';
+        } else if (isDeptVpForwarded) {
+          html += '<span style="font-size:.7rem; color:#059669; font-weight:600;">Locked (Forwarded to HR)</span>';
         } else if (a.hod_status !== 'Eligible') {
           html += '<button class="btn-shortlist btn-disabled" disabled title="HOD must mark as Eligible and forward department first">✓ Shortlist</button>';
         }
@@ -263,15 +404,33 @@
   }
 
   async function vpReview(id, status) {
-    var msg = status === 'Shortlisted' ? 'Shortlist this candidate?' : 'Mark as Not Shortlisted?';
-    if (!confirm(msg)) return;
+    var remarks = '';
+    if (status === 'Not Shortlisted') {
+      remarks = prompt('Enter mandatory reason for marking as Not Shortlisted:');
+      if (remarks === null) return;
+      remarks = remarks.trim();
+      if (!remarks) {
+        toast('Reason is mandatory when marking a candidate as Not Shortlisted', 'error');
+        return;
+      }
+    } else {
+      if (!confirm('Shortlist this candidate?')) return;
+    }
+
     try {
       var res = await api('/api/applications/' + id + '/vp-review', {
-        method: 'PUT', body: JSON.stringify({ vp_status: status })
+        method: 'PUT',
+        body: JSON.stringify({ vp_status: status, vp_remarks: remarks })
       });
       var data = await res.json();
-      if (res.ok) { toast('Marked as ' + status, 'success'); loadApps(); }
-      else { toast(data.error || 'Failed', 'error'); }
+      if (res.ok) {
+        toast('Candidate marked as ' + status, 'success');
+        await loadDepartments();
+        updateDeptActionBar();
+        loadApps();
+      } else {
+        toast(data.error || 'Failed', 'error');
+      }
     } catch(e) { toast('Error: ' + e, 'error'); }
   }
 
@@ -304,7 +463,7 @@
       var sections = {
         'Application': ['position','department','app_uuid'],
         'Personal': ['name','dob','gender','email','mobile_no','father_name','category','community'],
-        'Status': ['hod_status','vp_status','admin_notes']
+        'Status': ['hod_status','vp_status','vp_remarks','admin_notes']
       };
 
       for (var sec in sections) {
@@ -349,14 +508,37 @@
     } catch(e) { toast('Error downloading PDF', 'error'); }
   }
 
+  async function downloadReport(reportType) {
+    var dept = document.getElementById('filter-dept').value;
+    var endpointMap = {
+      'shortlisted-pdf': '/api/reports/vp-shortlisted-pdf',
+      'not-shortlisted-pdf': '/api/reports/vp-not-shortlisted-pdf',
+      'shortlisted-csv': '/api/reports/vp-shortlisted-csv',
+      'not-shortlisted-csv': '/api/reports/vp-not-shortlisted-csv'
+    };
+    var base = endpointMap[reportType];
+    if (!base) return;
+    var url = base + '?department=' + encodeURIComponent(dept);
 
-  async function exportCSV() {
-    var res = await fetch('/api/export/csv', { headers: { 'Authorization': 'Bearer ' + token } });
-    if (!res.ok) { toast('No data', 'info'); return; }
-    var blob = await res.blob();
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a'); a.href = url; a.download = 'psgcas_applications.csv'; a.click();
-    URL.revokeObjectURL(url);
+    try {
+      var res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+      if (!res.ok) {
+        var errJson = await res.json().catch(function(){ return {}; });
+        toast(errJson.error || 'Failed to download report', 'error');
+        return;
+      }
+      var blob = await res.blob();
+      var blobUrl = URL.createObjectURL(blob);
+      var ext = reportType.indexOf('csv') !== -1 ? 'csv' : 'pdf';
+      var filename = 'VP_' + reportType.replace('-','_') + '.' + ext;
+      var a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch(e) {
+      toast('Report download error: ' + e, 'error');
+    }
   }
 
   ['modal-close','modal-cancel'].forEach(function(id) {
@@ -364,7 +546,10 @@
   });
   document.getElementById('detail-overlay').addEventListener('click', function(e) { if(e.target===e.currentTarget) e.currentTarget.classList.remove('active'); });
 
-  loadApps();
+  loadDepartments().then(function() {
+    updateDeptActionBar();
+    loadApps();
+  });
 </script>
 </body>
 </html>

@@ -1079,6 +1079,9 @@
 
     const f = document.getElementById('apply-form');
     if (isFinalSubmit && !f.checkValidity()) {
+      errBanner.textContent = 'Please fill out all required fields marked with * and check the declaration before submitting.';
+      errBanner.style.display = 'block';
+      errBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
       f.reportValidity();
       return;
     }
@@ -1091,6 +1094,7 @@
       if (p.year && (p.year < 1950 || p.year > 2030)) {
         errBanner.textContent = 'Publication year must be between 1950 and 2030.';
         errBanner.style.display = 'block';
+        errBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
     }
@@ -1102,9 +1106,10 @@
     fd.append('teaching_experience', JSON.stringify(dynamicRows.teaching));
     fd.append('industry_experience', JSON.stringify(dynamicRows.industry));
     fd.append('pdf_details', JSON.stringify(dynamicRows.pdfDetails));
+    fd.append('research_data', JSON.stringify(researchData));
 
     try {
-      // Step A: Save main application
+      // Single unified transaction endpoint (saves biodata + research rows atomically, locks last on final submit)
       const res = await fetch('/api/my-application', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + token },
@@ -1114,37 +1119,24 @@
       if (!res.ok) {
         errBanner.textContent = data.error || 'Failed to save application.';
         errBanner.style.display = 'block';
+        errBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
 
       currentAppId = data.application_id;
-
-      // Step B: Save research child rows atomically
-      if (currentAppId) {
-        const rRes = await fetch('/api/applications/' + currentAppId + '/research', {
-          method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-          body: JSON.stringify(researchData)
-        });
-        if (!rRes.ok) {
-          const rErr = await rRes.json();
-          errBanner.textContent = rErr.error || 'Failed to save research details.';
-          errBanner.style.display = 'block';
-          return;
-        }
-      }
 
       if (isFinalSubmit) {
         document.getElementById('success-ref-code').textContent = data.app_number || data.app_uuid || 'CS/001';
         document.getElementById('success-overlay').classList.add('active');
       } else {
         alert('Draft saved successfully!');
-        window.location.reload();
+        await loadExistingDraft();
       }
 
     } catch(e) {
       errBanner.textContent = 'Network error while saving.';
       errBanner.style.display = 'block';
+      errBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }
 
